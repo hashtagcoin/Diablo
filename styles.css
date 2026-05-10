@@ -67,7 +67,7 @@ input {
 .sprite {
   --x: 0px;
   --y: 0px;
-  --sheet: url("items.png");
+  --sheet: url("items.webp");
   display: inline-block;
   width: var(--sprite-size, 56px);
   height: var(--sprite-size, 56px);
@@ -191,6 +191,7 @@ input {
 
 .icon-button,
 .close-button,
+.inventory-handle,
 .skill,
 .equip-slot,
 .inventory-slot,
@@ -248,8 +249,27 @@ input {
 
 .inventory.collapsed {
   transform: translateX(calc(100% + 16px));
+  opacity: 1;
+  pointer-events: none;
+}
+
+.inventory-handle {
+  position: absolute;
+  left: -36px;
+  top: 84px;
+  z-index: 5;
+  width: 34px;
+  height: 96px;
+  padding: 0;
+  color: #ffcf9c;
+  font-weight: bold;
   opacity: 0;
   pointer-events: none;
+}
+
+.inventory.collapsed .inventory-handle {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .inventory-frame {
@@ -511,40 +531,111 @@ input {
 }
 
 .hud {
+  --hud-left: 50%;
+  --hud-width: min(760px, calc(100vw - 24px));
+  --hud-orb-size: 156px;
+  --hud-gap: 14px;
   position: absolute;
-  left: 50%;
+  left: var(--hud-left);
   bottom: 12px;
   transform: translateX(-50%);
+  width: var(--hud-width);
   display: grid;
-  grid-template-columns: 148px minmax(420px, 560px) 148px;
+  grid-template-columns: var(--hud-orb-size) minmax(0, 1fr) var(--hud-orb-size);
   grid-template-rows: auto 20px;
-  gap: 8px 14px;
+  gap: 8px var(--hud-gap);
   align-items: end;
   pointer-events: auto;
+  overflow: visible;
   z-index: 6;
 }
 
+.game-shell.inventory-open .hud {
+  transform: none;
+}
+
 .orb {
-  width: 148px;
-  height: 148px;
-  display: grid;
-  place-items: end center;
-  padding-bottom: 15px;
+  --orb-fill: 100%;
+  --orb-liquid: rgba(170, 18, 15, 0.68);
+  --orb-art-offset-x: -2px;
+  --orb-art-bleed: 12px;
+  width: var(--hud-orb-size);
+  height: var(--hud-orb-size);
+  position: relative;
+  display: block;
+  padding: 0;
   border: 0;
   border-radius: 0;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
   filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.58));
   font-weight: bold;
   text-shadow: 0 2px 2px #000;
+  overflow: visible;
+}
+
+.orb::before,
+.orb::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.orb::before {
+  left: 50%;
+  top: 50%;
+  width: 108px;
+  height: 108px;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 38% 24%, rgba(255, 255, 255, 0.22), transparent 0 22%, transparent 35%),
+    linear-gradient(to top, var(--orb-liquid) 0 var(--orb-fill), rgba(0, 0, 0, 0.24) var(--orb-fill) 100%);
+  box-shadow:
+    inset 0 -14px 28px rgba(0, 0, 0, 0.42),
+    inset 0 9px 18px rgba(255, 255, 255, 0.08);
+  transition: background 140ms ease;
+}
+
+.orb::after {
+  inset: calc(var(--orb-art-bleed) * -1);
+  z-index: 1;
+  background-repeat: no-repeat;
+  background-position: calc(50% + var(--orb-art-offset-x)) center;
+  background-size: contain;
+}
+
+.orb span {
+  position: absolute;
+  left: 50%;
+  top: 70%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  min-width: 58px;
+  padding: 2px 5px;
+  color: #fff1d0;
+  font-size: 12px;
+  line-height: 1.1;
+  text-align: center;
+  white-space: nowrap;
+  background: rgba(5, 6, 6, 0.42);
+  border: 1px solid rgba(238, 196, 111, 0.36);
+  border-radius: 999px;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.58);
 }
 
 .health-orb {
+  --orb-liquid: rgba(178, 20, 17, 0.72);
+}
+
+.health-orb::after {
   background-image: url("assets/ui/health-orb.png");
 }
 
 .mana-orb {
+  --orb-liquid: rgba(18, 96, 190, 0.7);
+}
+
+.mana-orb::after {
   background-image: url("assets/ui/mana-orb.png");
 }
 
@@ -739,11 +830,23 @@ kbd {
   }
 
   .hud {
-    grid-template-columns: 120px minmax(360px, 1fr) 120px;
+    --hud-width: min(636px, calc(100vw - 24px));
+    --hud-orb-size: 124px;
+    --hud-gap: 10px;
   }
 
   .orb {
-    width: 120px;
-    height: 120px;
+    --orb-art-offset-x: -1px;
+    --orb-art-bleed: 9px;
+  }
+
+  .orb::before {
+    width: 86px;
+    height: 86px;
+  }
+
+  .orb span {
+    min-width: 52px;
+    font-size: 10px;
   }
 }

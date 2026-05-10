@@ -12,6 +12,8 @@ const WORLD_SEED = 93217;
 const SPRITE_CELL = 128;
 const ATLAS_DISPLAY = 322;
 const ATLAS_SIZE = 736;
+const LOW_HEALTH_FLASH_THRESHOLD = 0.35;
+const LOW_HEALTH_FLASH_DURATION = 0.7;
 
 function makeHero(id, name, x, y, stats, equipment, inventory) {
   return {
@@ -34,17 +36,32 @@ function makeHero(id, name, x, y, stats, equipment, inventory) {
     dir: 1,
     walkT: 0,
     attackT: 0,
+    lowHealthHitT: 0,
     equipment,
     inventory
   };
 }
 
 const atlasFiles = {
-  items: "items.png",
+  items: "items.webp",
   weapons: "weapons.png",
   armour: "armour.png",
   ui: "ui.png",
-  characters: "characters.png"
+  characters: "characters.png",
+  heroes: "heroes.webp",
+  enemies: "enemies.webp",
+  enemiesCommon: "enemies-common.webp"
+};
+
+const atlasDimensions = {
+  items: { width: ATLAS_SIZE, height: ATLAS_SIZE },
+  weapons: { width: ATLAS_SIZE, height: ATLAS_SIZE },
+  armour: { width: ATLAS_SIZE, height: ATLAS_SIZE },
+  ui: { width: ATLAS_SIZE, height: ATLAS_SIZE },
+  characters: { width: ATLAS_SIZE, height: ATLAS_SIZE },
+  heroes: { width: 1140, height: 260 },
+  enemies: { width: 1680, height: 700 },
+  enemiesCommon: { width: 1680, height: 373 }
 };
 
 const fallbackSprites = {
@@ -59,9 +76,15 @@ const fallbackSprites = {
   emberImp: ["characters", 3, 0],
   frostAcolyte: ["characters", 3, 1],
   cultist: ["characters", 2, 2],
+  commonOrc: ["characters", 2, 3],
+  commonGoblin: ["characters", 2, 4],
+  commonSkeleton: ["characters", 2, 0],
+  commonMummy: ["characters", 3, 2],
+  commonNecromancer: ["characters", 3, 1],
   redPotion: ["items", 0, 0],
   bluePotion: ["items", 0, 1],
   greenPotion: ["items", 0, 2],
+  wildMeat: ["items", 2, 4],
   flameSword: ["weapons", 3, 0],
   crossbow: ["weapons", 1, 4],
   fireOrb: ["items", 1, 2],
@@ -80,11 +103,38 @@ const fallbackSprites = {
   activeSlot: ["ui", 1, 1]
 };
 
+const characterSheetSprites = {
+  alaric: { sheet: "heroes", name: "Warrior", x: 29, y: 41, width: 160, height: 178, draw: { x: -36, y: -86, w: 72, h: 80 }, iconScale: 0.36, fullBody: true },
+  sable: { sheet: "heroes", name: "Sorceress", x: 263, y: 40, width: 159, height: 195, draw: { x: -33, y: -88, w: 66, h: 82 }, iconScale: 0.36, fullBody: true },
+  rowan: { sheet: "heroes", name: "Ranger", x: 732, y: 19, width: 154, height: 221, draw: { x: -32, y: -96, w: 64, h: 92 }, iconScale: 0.36, fullBody: true },
+  heroWizard: { sheet: "heroes", name: "Wizard", x: 496, y: 32, width: 162, height: 201, draw: { x: -34, y: -91, w: 68, h: 86 }, fullBody: true },
+  heroDwarf: { sheet: "heroes", name: "Dwarf Guardian", x: 961, y: 45, width: 139, height: 190, draw: { x: -31, y: -84, w: 62, h: 78 }, fullBody: true },
+  dragon: { sheet: "enemies", name: "Dragon", x: 80, y: 33, width: 300, height: 293, draw: { x: -70, y: -104, w: 140, h: 112 }, keyColor: "white" },
+  emberImp: { sheet: "enemies", name: "Demon", x: 460, y: 85, width: 232, height: 229, draw: { x: -36, y: -84, w: 72, h: 76 }, keyColor: "white" },
+  goblinRaider: { sheet: "enemies", name: "Goblin Raider", x: 800, y: 92, width: 208, height: 216, draw: { x: -34, y: -82, w: 68, h: 74 }, keyColor: "white" },
+  swampHag: { sheet: "enemies", name: "Serpent Hag", x: 1120, y: 47, width: 188, height: 273, draw: { x: -32, y: -94, w: 64, h: 88 }, keyColor: "white" },
+  cultist: { sheet: "enemies", name: "Vampire Cultist", x: 1391, y: 66, width: 242, height: 234, draw: { x: -37, y: -84, w: 74, h: 76 }, keyColor: "white" },
+  beastWolf: { sheet: "enemies", name: "Werewolf", x: 96, y: 401, width: 247, height: 241, draw: { x: -42, y: -84, w: 84, h: 78 }, keyColor: "white" },
+  ogreBrute: { sheet: "enemies", name: "Ogre Brute", x: 457, y: 388, width: 243, height: 261, draw: { x: -40, y: -91, w: 80, h: 86 }, keyColor: "white" },
+  spider: { sheet: "enemies", name: "Spider", x: 755, y: 392, width: 265, height: 255, draw: { x: -46, y: -84, w: 92, h: 78 }, keyColor: "white" },
+  skeleton: { sheet: "enemies", name: "Wraith", x: 1102, y: 401, width: 217, height: 259, draw: { x: -35, y: -94, w: 70, h: 86 }, keyColor: "white" },
+  frostAcolyte: { sheet: "enemies", name: "Frost Wraith", x: 1102, y: 401, width: 217, height: 259, draw: { x: -35, y: -96, w: 70, h: 90 }, keyColor: "white" },
+  fireElemental: { sheet: "enemies", name: "Fire Elemental", x: 1408, y: 392, width: 220, height: 288, draw: { x: -34, y: -99, w: 68, h: 92 }, keyColor: "white" },
+  commonOrc: { sheet: "enemiesCommon", name: "Orc Brute", x: 80, y: 25, width: 247, height: 294, draw: { x: -39, y: -89, w: 78, h: 84 } },
+  commonGoblin: { sheet: "enemiesCommon", name: "Goblin", x: 421, y: 73, width: 220, height: 267, draw: { x: -34, y: -84, w: 68, h: 78 } },
+  commonSkeleton: { sheet: "enemiesCommon", name: "Skeleton Warrior", x: 717, y: 43, width: 223, height: 313, draw: { x: -35, y: -96, w: 70, h: 90 } },
+  commonMummy: { sheet: "enemiesCommon", name: "Mummy", x: 1053, y: 53, width: 213, height: 295, draw: { x: -34, y: -91, w: 68, h: 84 } },
+  commonNecromancer: { sheet: "enemiesCommon", name: "Necromancer", x: 1381, y: 0, width: 241, height: 359, draw: { x: -36, y: -104, w: 72, h: 98 } }
+};
+
+const commonEnemyTypes = ["commonOrc", "commonGoblin", "commonSkeleton", "commonMummy", "commonNecromancer"];
+
 const images = {};
 const worldAssets = {};
 const biomeAssets = {};
 const biomeSprites = {};
 const spriteLookup = {};
+const keyedSpriteCache = {};
 let assetsReady = false;
 
 const generatedWorldFiles = {
@@ -96,6 +146,16 @@ const generatedWorldFiles = {
   deadTree: "assets/world/dead-tree.png",
   obelisk: "assets/world/obelisk.png",
   backdrop: "assets/world/backdrop.png"
+};
+
+const terrainAssets = {};
+const terrainAssetFiles = {
+  grassSmall: { src: "assets/terrain/grass-small.png", cols: 5, rows: 5 },
+  grassMedium: { src: "assets/terrain/grass-medium.png", cols: 4, rows: 4 },
+  grassLarge: { src: "assets/terrain/grass-large.png", cols: 2, rows: 2 },
+  forestClusters: { src: "assets/terrain/forest-clusters.png", cols: 2, rows: 2 },
+  river: { src: "assets/terrain/river.png", cols: 5, rows: 5 },
+  riverEdge: { src: "assets/terrain/river-edge.png", cols: 5, rows: 5 }
 };
 
 const starterInventory = [
@@ -131,6 +191,8 @@ const state = {
   projectiles: [],
   particles: [],
   floating: [],
+  blood: [],
+  bloodStamp: 0,
   quest: { temple: false, priest: false }
 };
 
@@ -144,6 +206,7 @@ const itemInfo = {
   redPotion: { name: "Blood Vial", type: "potion", text: "Restores 35 health.", use: () => heal("hp", 35) },
   bluePotion: { name: "Moonwater Vial", type: "potion", text: "Restores 30 mana.", use: () => heal("mana", 30) },
   greenPotion: { name: "Bitterleaf Draught", type: "potion", text: "Restores 35 stamina.", use: () => heal("stamina", 35) },
+  wildMeat: { name: "Wild Meat", type: "food", text: "Food retrieved from hunted wildlife.", use: () => heal("hp", 18) },
   runeShard: { name: "Rune Shard", type: "quest", text: "A humming fragment used to unlock buried temple doors." },
   flameSword: { name: "Emberbrand", type: "weapon", text: "A close combat blade with fire damage.", slot: "weapon" },
   crossbow: { name: "Gilded Crossbow", type: "weapon", text: "A ranged weapon. Equip it to strengthen ranged attacks.", slot: "weapon" },
@@ -180,6 +243,7 @@ async function loadAssets() {
     image.src = src;
     worldAssets[key] = image;
   });
+  loadTerrainAssets();
   try {
     const res = await fetch("assets/biome/manifest.json");
     const manifest = await res.json();
@@ -208,10 +272,33 @@ async function loadAssets() {
       spriteLookup[id] = { id, name: id, ...spriteCell(sheet, row, column) };
     }
   }
+  applyCharacterSheetSprites();
 
   applySpriteStyles();
-  await Promise.all([...Object.values(images), ...Object.values(worldAssets), ...Object.values(biomeAssets)].map(img => img.decode().catch(() => undefined)));
+  await Promise.all([...Object.values(images), ...Object.values(worldAssets), ...Object.values(biomeAssets), ...Object.values(terrainAssets)].map(img => img.decode().catch(() => undefined)));
   assetsReady = true;
+}
+
+function applyCharacterSheetSprites() {
+  for (const [id, sprite] of Object.entries(characterSheetSprites)) {
+    spriteLookup[id] = {
+      id,
+      ...sprite,
+      fallback: spriteLookup[id]
+    };
+  }
+}
+
+function loadTerrainAssets() {
+  Object.entries(terrainAssetFiles).forEach(([key, sheet]) => {
+    terrainAssets[key] = makeTerrainImage(sheet.src);
+  });
+}
+
+function makeTerrainImage(src) {
+  const image = new Image();
+  image.src = src;
+  return image;
 }
 
 function applySpriteStyles() {
@@ -219,10 +306,12 @@ function applySpriteStyles() {
     const id = el.dataset.sprite;
     const sprite = spriteLookup[id] || spriteLookup.redPotion;
     if (!sprite) return;
-    const scale = ATLAS_DISPLAY / ATLAS_SIZE;
+    const scale = sprite.iconScale || ATLAS_DISPLAY / ATLAS_SIZE;
+    const atlas = atlasDimensions[sprite.sheet] || atlasDimensions.items;
     el.style.setProperty("--sheet", `url("${atlasFiles[sprite.sheet]}")`);
     el.style.setProperty("--x", `${-sprite.x * scale}px`);
     el.style.setProperty("--y", `${-sprite.y * scale}px`);
+    el.style.backgroundSize = `${atlas.width * scale}px ${atlas.height * scale}px`;
   });
 }
 
@@ -246,6 +335,36 @@ function hash2(x, y, seed = WORLD_SEED) {
   let h = seed ^ Math.imul(x, 374761393) ^ Math.imul(y, 668265263);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+function smoothNoise2(x, y, seed = WORLD_SEED) {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const xf = x - x0;
+  const yf = y - y0;
+  const sx = xf * xf * (3 - 2 * xf);
+  const sy = yf * yf * (3 - 2 * yf);
+  const n00 = hash2(x0, y0, seed);
+  const n10 = hash2(x0 + 1, y0, seed);
+  const n01 = hash2(x0, y0 + 1, seed);
+  const n11 = hash2(x0 + 1, y0 + 1, seed);
+  const nx0 = n00 + (n10 - n00) * sx;
+  const nx1 = n01 + (n11 - n01) * sx;
+  return nx0 + (nx1 - nx0) * sy;
+}
+
+function layeredNoise2(x, y, seed = WORLD_SEED, octaves = 4, scale = 28, persistence = 0.52) {
+  let value = 0;
+  let amplitude = 1;
+  let total = 0;
+  let frequency = 1 / scale;
+  for (let octave = 0; octave < octaves; octave++) {
+    value += smoothNoise2(x * frequency, y * frequency, seed + octave * 101) * amplitude;
+    total += amplitude;
+    amplitude *= persistence;
+    frequency *= 2;
+  }
+  return total ? value / total : 0;
 }
 
 function chunkKey(cx, cy) {
@@ -272,13 +391,32 @@ function tileFromSeed(x, y) {
   const road = Math.abs(x - y + 4) < 1.25 || Math.abs(Math.sin((x + y) * 0.055)) < 0.035;
   const propRoll = hash2(x, y, WORLD_SEED + 29);
   const dense = biome === "deepwood" ? 0.86 : biome === "ruins" ? 0.9 : 0.93;
+  const water = river && !road;
   return {
     x,
     y,
     biome,
-    water: river && !road,
+    water,
     road,
+    forest: pickForestClusterForTile(biome, x, y, water, road),
     prop: !river && !road && propRoll > dense ? pickPropForTile(biome, x, y) : null
+  };
+}
+
+function pickForestClusterForTile(biome, x, y, water, road) {
+  if (water || road) return null;
+  const canopy = layeredNoise2(x, y, WORLD_SEED + 137, 5, 34, 0.56);
+  const grove = layeredNoise2(x + 700, y - 300, WORLD_SEED + 151, 3, 92, 0.5);
+  const scatter = hash2(x, y, WORLD_SEED + 163);
+  const biomeBias = biome === "deepwood" ? 0.13 : biome === "grove" ? 0.06 : biome === "marsh" ? 0.03 : -0.04;
+  const threshold = biome === "deepwood" ? 0.54 : biome === "grove" ? 0.6 : biome === "marsh" ? 0.64 : 0.7;
+  const score = canopy * 0.7 + grove * 0.3 + biomeBias;
+  if (score < threshold || scatter < 0.18) return null;
+  const density = clamp(Math.floor((score - threshold) * 18) + 3, 3, 7);
+  return {
+    variant: Math.floor(hash2(x, y, WORLD_SEED + 167) * 4) % 4,
+    density,
+    scale: 0.86 + hash2(x, y, WORLD_SEED + 173) * 0.28
   };
 }
 
@@ -356,7 +494,28 @@ function seedChunkEntities(chunk) {
       : ["building_small_hunter_cabin", "village_gloomy_woodland_hut", "building_ruined_blacksmith_shed"];
     chunk.buildings.push({ id: `building-${cx}-${cy}`, name: biome === "ruins" ? "Village Ruin" : "Woodland Shelter", x: centerX - 1.5, y: centerY - 1.5, w: 3, h: 3, open: true, biomeAsset: assets[Math.floor(roll * assets.length) % assets.length] });
   }
-  if (distFromSpawn > 8 && roll > 0.38) {
+  if (distFromSpawn > 8) {
+    const commonRoll = hash2(cx, cy, WORLD_SEED + 97);
+    if (commonRoll > 0.22) {
+      const count = 2 + Math.floor(hash2(cx, cy, WORLD_SEED + 98) * 7);
+      for (let i = 0; i < count; i++) {
+        const type = commonEnemyTypes[(i + Math.floor(commonRoll * 100)) % commonEnemyTypes.length];
+        const spread = hash2(cx + i, cy, WORLD_SEED + 99) * Math.PI * 2;
+        const radius = 0.8 + hash2(cx, cy + i, WORLD_SEED + 100) * 2.6;
+        const stats = commonEnemyStats(type);
+        chunk.enemies.push(enemy(
+          type,
+          enemyName(type),
+          centerX + Math.cos(spread) * radius,
+          centerY + Math.sin(spread) * radius,
+          stats.hp,
+          stats.damage,
+          commonRoll > 0.72 ? "coinStack" : "redPotion"
+        ));
+      }
+    }
+  }
+  if (distFromSpawn > 8 && roll > 0.82) {
     const enemyType = biome === "marsh" ? ["swampHag", "beastWolf"] : biome === "ruins" ? ["skeleton", "cultist"] : ["goblinRaider", "beastWolf", "emberImp"];
     const count = roll > 0.82 ? 3 : 2;
     for (let i = 0; i < count; i++) {
@@ -366,7 +525,7 @@ function seedChunkEntities(chunk) {
   }
   if (roll < 0.34) {
     const animals = ["creature_small_rabbit_silhouette", "creature_small_fox_silhouette", "creature_deer_standing_silhouette", "creature_wolf_prowling_silhouette", "creature_boar_silhouette"];
-    chunk.animals.push({ id: `animal-${cx}-${cy}`, name: "Wildlife", biomeAsset: animals[Math.floor(roll * animals.length * 10) % animals.length], x: centerX + 2, y: centerY - 2, walkT: 0, dir: 1, kind: "animal" });
+    chunk.animals.push(animal(`animal-${cx}-${cy}`, "Wildlife", animals[Math.floor(roll * animals.length * 10) % animals.length], centerX + 2, centerY - 2));
   }
 }
 
@@ -396,26 +555,31 @@ function refreshActiveWorld() {
   state.enemies = chunks.flatMap(chunk => chunk.enemies).filter(e => !e.dead && !state.worldEdits[worldEditKey("enemy", e.id)]?.dead);
   state.npcs = chunks.flatMap(chunk => chunk.npcs);
   state.buildings = chunks.flatMap(chunk => chunk.buildings);
-  state.animals = chunks.flatMap(chunk => chunk.animals || []);
+  state.animals = chunks.flatMap(chunk => chunk.animals || []).filter(a => !a.dead && !state.worldEdits[worldEditKey("animal", a.id)]?.dead);
 }
 
-function visibleTileBounds(pad = 4) {
-  const corners = [
+function visibleTileBounds(pad = 4, corners = null) {
+  const viewCorners = corners || [
     screenToWorld(0, 0),
     screenToWorld(canvas.clientWidth, 0),
     screenToWorld(0, canvas.clientHeight),
     screenToWorld(canvas.clientWidth, canvas.clientHeight)
   ];
   return {
-    minX: Math.floor(Math.min(...corners.map(p => p.x))) - pad,
-    maxX: Math.ceil(Math.max(...corners.map(p => p.x))) + pad,
-    minY: Math.floor(Math.min(...corners.map(p => p.y))) - pad,
-    maxY: Math.ceil(Math.max(...corners.map(p => p.y))) + pad
+    minX: Math.floor(Math.min(...viewCorners.map(p => p.x))) - pad,
+    maxX: Math.ceil(Math.max(...viewCorners.map(p => p.x))) + pad,
+    minY: Math.floor(Math.min(...viewCorners.map(p => p.y))) - pad,
+    maxY: Math.ceil(Math.max(...viewCorners.map(p => p.y))) + pad
   };
 }
 
 function enemyName(type) {
   return {
+    commonOrc: "Orc Brute",
+    commonGoblin: "Goblin",
+    commonSkeleton: "Skeleton Warrior",
+    commonMummy: "Mummy",
+    commonNecromancer: "Necromancer",
     beastWolf: "Dread Wolf",
     goblinRaider: "Raider",
     swampHag: "Swamp Hag",
@@ -423,6 +587,16 @@ function enemyName(type) {
     skeleton: "Skeleton",
     cultist: "Cultist"
   }[type] || "Enemy";
+}
+
+function commonEnemyStats(type) {
+  return {
+    commonOrc: { hp: 68, damage: 11 },
+    commonGoblin: { hp: 44, damage: 8 },
+    commonSkeleton: { hp: 56, damage: 9 },
+    commonMummy: { hp: 62, damage: 10 },
+    commonNecromancer: { hp: 58, damage: 12 }
+  }[type] || { hp: 52, damage: 9 };
 }
 
 function buildWorld() {
@@ -446,9 +620,28 @@ function enemy(sprite, name, x, y, hp, damage, drop) {
     aggro: sprite === "frostAcolyte" ? 6 : 5,
     attackRange: sprite === "frostAcolyte" ? 3.8 : 1.25,
     cooldown: 0,
+    dir: 1,
     walkT: 0,
     attackT: 0,
     dead: false
+  };
+}
+
+function animal(id, name, biomeAsset, x, y, hp = 18) {
+  return {
+    id,
+    name,
+    biomeAsset,
+    x,
+    y,
+    hp,
+    maxHp: hp,
+    drop: "wildMeat",
+    walkT: 0,
+    dir: 1,
+    attackT: 0,
+    dead: false,
+    kind: "animal"
   };
 }
 
@@ -490,6 +683,40 @@ function resize() {
   canvas.width = Math.floor(canvas.clientWidth * dpr);
   canvas.height = Math.floor(canvas.clientHeight * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  updateHudLayout();
+}
+
+function updateHudLayout() {
+  const shell = document.getElementById("gameShell");
+  const hud = document.querySelector(".hud");
+  const inventory = document.getElementById("inventoryPanel");
+  if (!shell || !hud || !inventory) return;
+
+  const inventoryOpen = !inventory.classList.contains("collapsed");
+  shell.classList.toggle("inventory-open", inventoryOpen);
+  if (!inventoryOpen) {
+    hud.style.removeProperty("--hud-left");
+    hud.style.removeProperty("--hud-width");
+    hud.style.removeProperty("--hud-orb-size");
+    hud.style.removeProperty("--hud-gap");
+    return;
+  }
+
+  const shellRect = shell.getBoundingClientRect();
+  const inventoryRect = inventory.getBoundingClientRect();
+  const safeGap = 16;
+  const sidePadding = 12;
+  const availableWidth = Math.max(480, inventoryRect.left - shellRect.left - safeGap - sidePadding);
+  const hudWidth = Math.min(760, availableWidth - sidePadding);
+  const compactRatio = clamp((hudWidth - 520) / 240, 0, 1);
+  const orbSize = Math.round(112 + compactRatio * 44);
+  const gap = Math.round(10 + compactRatio * 4);
+  const left = sidePadding + Math.max(0, (availableWidth - hudWidth) / 2);
+
+  hud.style.setProperty("--hud-left", `${left}px`);
+  hud.style.setProperty("--hud-width", `${hudWidth}px`);
+  hud.style.setProperty("--hud-orb-size", `${orbSize}px`);
+  hud.style.setProperty("--hud-gap", `${gap}px`);
 }
 
 function worldToScreen(x, y) {
@@ -547,6 +774,7 @@ function update(dt) {
   }
 
   player.attackT = Math.max(0, player.attackT - dt);
+  updateHeroHitEffects(dt);
   state.camera.x += (player.x - state.camera.x) * 0.08;
   state.camera.y += (player.y - state.camera.y) * 0.08;
   updatePartyFollowers(dt);
@@ -555,6 +783,7 @@ function update(dt) {
   updateEnemies(dt);
   updateProjectiles(dt);
   updateParticles(dt);
+  updateBlood(dt);
   pickupNearbyLoot();
   updateQuestState();
   saveGame();
@@ -592,6 +821,7 @@ function updatePartyFollowers(dt) {
 
 function updateAnimals(dt) {
   for (const animal of state.animals || []) {
+    if (animal.dead) continue;
     const hero = activeHero();
     const dist = distance(animal, hero);
     if (dist < 4) {
@@ -614,6 +844,9 @@ function updateEnemies(dt) {
     e.attackT = Math.max(0, e.attackT - dt);
     const targetHero = nearestHero(e);
     const dist = distance(e, targetHero);
+    if (dist <= e.aggro || dist <= e.attackRange) {
+      e.dir = targetHero.x >= e.x ? 1 : -1;
+    }
     if (dist < e.aggro && dist > e.attackRange) {
       const dx = (targetHero.x - e.x) / dist;
       const dy = (targetHero.y - e.y) / dist;
@@ -626,10 +859,16 @@ function updateEnemies(dt) {
     if (dist <= e.attackRange && e.cooldown <= 0) {
       e.cooldown = e.sprite === "frostAcolyte" ? 1.35 : 1.05;
       e.attackT = 0.35;
-      damageHero(targetHero, e.damage);
+      damageHero(targetHero, e.damage, e);
       addFloating(`-${e.damage}`, targetHero.x, targetHero.y, "#ff9b7b");
       burst(targetHero.x, targetHero.y, e.sprite === "frostAcolyte" ? "#79d7ff" : "#e14527", 10);
     }
+  }
+}
+
+function updateHeroHitEffects(dt) {
+  for (const hero of state.heroes) {
+    hero.lowHealthHitT = Math.max(0, (hero.lowHealthHitT || 0) - dt);
   }
 }
 
@@ -666,10 +905,26 @@ function updateParticles(dt) {
   });
 }
 
-function damageHero(hero, amount) {
+function updateBlood(dt) {
+  state.blood = state.blood.filter(stain => {
+    stain.age += dt;
+    const activeNearbyEnemy = state.enemies.some(enemy => !enemy.dead && distance(enemy, stain) < 5.2);
+    const decayRate = stain.fadeFast || !activeNearbyEnemy ? 0.055 : 0.006;
+    stain.life -= dt * decayRate;
+    return stain.life > 0 && stain.age < 80;
+  });
+}
+
+function damageHero(hero, amount, source = null) {
+  addBlood(hero.x, hero.y, amount, source ? "hero-hit" : "hero");
   hero.hp = Math.max(0, hero.hp - amount);
+  if (hero.hp > 0 && hero.hp / hero.maxHp <= LOW_HEALTH_FLASH_THRESHOLD) {
+    hero.lowHealthHitT = LOW_HEALTH_FLASH_DURATION;
+  }
   if (hero.hp <= 0) {
+    addBlood(hero.x, hero.y, amount * 1.3, "hero-down");
     hero.hp = hero.maxHp;
+    hero.lowHealthHitT = 0;
     hero.x = activeHero().x + (hash2(hero.x, hero.y) - 0.5) * 2;
     hero.y = activeHero().y + 1.2;
     toast(`${hero.name} was pulled back from the brink.`);
@@ -723,14 +978,38 @@ function hitEnemy(target, damage, kind) {
   const finalDamage = crit ? Math.round(damage * 1.8) : damage;
   target.hp = Math.max(0, target.hp - finalDamage);
   target.attackT = 0.22;
+  addBlood(target.x, target.y, finalDamage, kind);
   addFloating(`${crit ? "Crit " : ""}-${finalDamage}`, target.x, target.y, kind === "frost" ? "#b9efff" : "#ffcf75");
   if (target.hp <= 0) {
     target.dead = true;
-    state.worldEdits[worldEditKey("enemy", target.id)] = { dead: true };
+    addBlood(target.x, target.y, finalDamage * 1.6, "kill", true);
+    state.worldEdits[worldEditKey(target.kind === "animal" ? "animal" : "enemy", target.id)] = { dead: true };
     dropLoot(target);
-    activeHero().xp += 12;
+    if (target.kind !== "animal") activeHero().xp += 12;
     toast(`${target.name} defeated.`);
   }
+}
+
+function addBlood(x, y, damage, kind = "hit", fadeFast = false) {
+  const tile = getTile(x, y);
+  if (tile?.water) return;
+  const strength = clamp(damage / 28, 0.35, 1.65);
+  const count = kind === "kill" ? 4 : kind === "hero-down" ? 3 : 2;
+  for (let i = 0; i < count; i++) {
+    const stamp = ++state.bloodStamp;
+    const angle = hash2(Math.floor(x * 17) + i, Math.floor(y * 19) - i, WORLD_SEED + stamp) * Math.PI * 2;
+    const spread = (0.08 + hash2(Math.floor(x * 23) - i, Math.floor(y * 29) + i, WORLD_SEED + stamp + 7) * 0.36) * strength;
+    state.blood.push({
+      x: x + Math.cos(angle) * spread,
+      y: y + Math.sin(angle) * spread,
+      size: (0.26 + hash2(stamp, i, WORLD_SEED + 211) * 0.34) * strength,
+      seed: stamp,
+      age: 0,
+      life: 1,
+      fadeFast
+    });
+  }
+  if (state.blood.length > 180) state.blood.splice(0, state.blood.length - 180);
 }
 
 function dropLoot(enemyState) {
@@ -761,7 +1040,7 @@ function pickupNearbyLoot() {
 
 function addItem(id, qty = 1, hero = activeHero()) {
   const existing = hero.inventory.find(i => i.id === id);
-  if (existing && itemInfo[id]?.type === "potion") existing.qty += qty;
+  if (existing && ["potion", "food"].includes(itemInfo[id]?.type)) existing.qty += qty;
   else hero.inventory.push({ id, qty });
 }
 
@@ -794,7 +1073,11 @@ function nearestEnemy(range = 8) {
   let best = null;
   let bestDist = range;
   const hero = activeHero();
-  for (const e of state.enemies) {
+  const targets = [
+    ...state.enemies,
+    ...(state.animals || [])
+  ];
+  for (const e of targets) {
     if (e.dead) continue;
     const d = distance(e, hero);
     if (d < bestDist) {
@@ -911,41 +1194,22 @@ function drawBackdrop() {
 }
 
 function drawMap() {
-  const bounds = visibleTileBounds();
+  const view = createMapRenderView();
+  const visibleTiles = getVisibleTerrainTiles(view);
   const props = [];
-  for (let y = bounds.minY; y <= bounds.maxY; y++) {
-    for (let x = bounds.minX; x <= bounds.maxX; x++) {
-      const tile = getTile(x, y);
-      const p = worldToScreen(x, y);
-      const tw = TILE_W * state.camera.zoom;
-      const th = TILE_H * state.camera.zoom;
-      if (p.x < -tw || p.x > canvas.clientWidth + tw || p.y < -th || p.y > canvas.clientHeight + th) continue;
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(p.x + tw / 2, p.y + th / 2);
-      ctx.lineTo(p.x, p.y + th);
-      ctx.lineTo(p.x - tw / 2, p.y + th / 2);
-      ctx.closePath();
-      ctx.fillStyle = tile.water ? "#063436" : tile.road ? "#3a3328" : biomeColor(tile.biome);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(176, 119, 45, 0.16)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      if (assetLoaded(worldAssets.dungeonFloor) && !tile.water) {
-        ctx.save();
-        ctx.globalAlpha = tile.road ? 0.24 : 0.42;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + tw / 2, p.y + th / 2);
-        ctx.lineTo(p.x, p.y + th);
-        ctx.lineTo(p.x - tw / 2, p.y + th / 2);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(worldAssets.dungeonFloor, p.x - tw / 2, p.y, tw, th);
-        ctx.restore();
-      }
-      if (tile.prop && !tile.water) {
-        props.push({ id: tile.prop, x, y, screen: p, tall: tile.prop.includes("tree") || tile.prop.includes("bramble") });
+  drawBaseTerrain(visibleTiles);
+  drawFloraTerrain(visibleTiles);
+  drawForestTerrain(visibleTiles);
+  drawWaterTerrain(visibleTiles);
+  drawBloodGround(view.bloodBounds);
+  for (const entry of visibleTiles) {
+    const { tile, x, y, screen } = entry;
+    if (tile.prop && !tile.water) {
+      const tall = tile.prop.includes("tree") || tile.prop.includes("bramble");
+      const width = tall ? 92 : 62;
+      const height = tall ? 110 : 68;
+      if (isScreenRectVisible(screen.x - width * state.camera.zoom / 2, screen.y - height * state.camera.zoom, width * state.camera.zoom, height * state.camera.zoom + TILE_H * state.camera.zoom)) {
+        props.push({ id: tile.prop, x, y, screen, tall });
       }
     }
   }
@@ -956,6 +1220,365 @@ function drawMap() {
       ctx.fillRect(prop.screen.x - 3, prop.screen.y + TILE_H * state.camera.zoom / 2 - 2, 6, 4);
     }
   }
+}
+
+function createMapRenderView() {
+  const corners = [
+    screenToWorld(0, 0),
+    screenToWorld(canvas.clientWidth, 0),
+    screenToWorld(0, canvas.clientHeight),
+    screenToWorld(canvas.clientWidth, canvas.clientHeight)
+  ];
+  return {
+    tileBounds: visibleTileBounds(4, corners),
+    bloodBounds: visibleTileBounds(2, corners)
+  };
+}
+
+function drawBloodGround(bounds) {
+  if (!state.blood.length) return;
+  const z = state.camera.zoom;
+  ctx.save();
+  for (const stain of state.blood) {
+    if (stain.x < bounds.minX || stain.x > bounds.maxX || stain.y < bounds.minY || stain.y > bounds.maxY) continue;
+    const p = worldToScreen(stain.x, stain.y);
+    const alpha = clamp(stain.life, 0, 1) * 0.58;
+    const base = TILE_W * z * stain.size;
+    if (!isScreenRectVisible(p.x - base * 0.45, p.y + TILE_H * z * 0.44 - base * 0.18, base * 0.9, base * 0.36)) continue;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#8f0909";
+    for (let i = 0; i < 3; i++) {
+      const ox = (hash2(stain.seed, i, WORLD_SEED + 223) - 0.5) * base * 0.55;
+      const oy = (hash2(stain.seed, i, WORLD_SEED + 229) - 0.5) * base * 0.22;
+      const rx = base * (0.18 + hash2(stain.seed, i, WORLD_SEED + 233) * 0.16);
+      const ry = base * (0.055 + hash2(stain.seed, i, WORLD_SEED + 239) * 0.055);
+      ctx.beginPath();
+      ctx.ellipse(p.x + ox, p.y + TILE_H * z * 0.55 + oy, rx, ry, -0.4 + hash2(stain.seed, i, WORLD_SEED + 241) * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function getVisibleTerrainTiles(view) {
+  const bounds = view.tileBounds;
+  const tiles = [];
+  const tw = TILE_W * state.camera.zoom;
+  const th = TILE_H * state.camera.zoom;
+  for (let y = bounds.minY; y <= bounds.maxY; y++) {
+    for (let x = bounds.minX; x <= bounds.maxX; x++) {
+      const screen = worldToScreen(x, y);
+      if (!isScreenRectVisible(screen.x - tw / 2, screen.y, tw, th)) continue;
+      const tile = getTile(x, y);
+      const riverMask = tile.water || (!tile.road && !tile.water) ? riverNeighborMask(x, y) : 0;
+      tiles.push({ x, y, tile, screen, tw, th, riverMask });
+    }
+  }
+  return tiles;
+}
+
+function drawBaseTerrain(visibleTiles) {
+  const fillPaths = new Map();
+  const strokePath = new Path2D();
+  for (const entry of visibleTiles) {
+    const { tile, screen, tw, th } = entry;
+    const fillStyle = tile.water ? "#063436" : tile.road ? "#3a3328" : biomeColor(tile.biome);
+    let fillPath = fillPaths.get(fillStyle);
+    if (!fillPath) {
+      fillPath = new Path2D();
+      fillPaths.set(fillStyle, fillPath);
+    }
+    addTileDiamondToPath(fillPath, screen, tw, th);
+    addTileDiamondToPath(strokePath, screen, tw, th);
+  }
+  for (const [fillStyle, path] of fillPaths) {
+    ctx.fillStyle = fillStyle;
+    ctx.fill(path);
+  }
+  const dungeonFloorLoaded = assetLoaded(worldAssets.dungeonFloor);
+  if (dungeonFloorLoaded) {
+    for (const entry of visibleTiles) {
+      const { tile, screen, tw, th } = entry;
+      if (tile.water) continue;
+      drawClippedTerrainImage(worldAssets.dungeonFloor, screen, tw, th, tile.road ? 0.24 : 0.42);
+    }
+  }
+  ctx.strokeStyle = "rgba(176, 119, 45, 0.16)";
+  ctx.lineWidth = 1;
+  ctx.stroke(strokePath);
+}
+
+function drawFloraTerrain(visibleTiles) {
+  const grassSheetsLoaded = assetLoaded(terrainAssets.grassSmall) && assetLoaded(terrainAssets.grassMedium) && assetLoaded(terrainAssets.grassLarge);
+  const riverEdgeLoaded = assetLoaded(terrainAssets.riverEdge);
+  for (const entry of visibleTiles) {
+    const { tile, x, y, screen, tw, th, riverMask } = entry;
+    if (tile.water || tile.road) continue;
+    if (grassSheetsLoaded) {
+      const alpha = tile.biome === "ruins" ? 0.34 : tile.biome === "marsh" ? 0.52 : 0.62;
+      drawTerrainSheetCell("grassLarge", pickSheetCell("grassLarge", x, y, 83), screen, tw, th, alpha * 0.72);
+      drawTerrainSheetCell("grassMedium", pickSheetCell("grassMedium", x, y, 89), screen, tw, th, alpha * 0.88);
+      drawTerrainSheetCell("grassSmall", pickSheetCell("grassSmall", x, y, 97), screen, tw, th, alpha);
+    } else {
+      drawProceduralGrassOverlay(tile, x, y, screen, tw, th);
+    }
+    if (riverEdgeLoaded && riverMask > 0) {
+      drawTerrainSheetCell("riverEdge", riverEdgeCellIndex(riverMask, x, y), screen, tw, th, 0.54);
+    }
+  }
+}
+
+function drawWaterTerrain(visibleTiles) {
+  const riverLoaded = assetLoaded(terrainAssets.river);
+  const riverEdgeLoaded = assetLoaded(terrainAssets.riverEdge);
+  for (const entry of visibleTiles) {
+    const { tile, x, y, screen, tw, th, riverMask } = entry;
+    if (!tile.water) continue;
+    if (riverLoaded) {
+      drawTerrainSheetCell("river", pickSheetCell("river", x, y, 101), screen, tw, th, 0.95);
+      if (riverEdgeLoaded && riverMask !== 255) {
+        drawTerrainSheetCell("riverEdge", riverEdgeCellIndex(riverMask, x, y), screen, tw, th, 0.62);
+      }
+    } else {
+      drawProceduralRiverOverlay(riverMask, screen, tw, th);
+    }
+  }
+}
+
+function drawForestTerrain(visibleTiles) {
+  const forestTiles = [];
+  for (const entry of visibleTiles) {
+    const { tile } = entry;
+    if (!tile.forest || tile.water) continue;
+    forestTiles.push(entry);
+  }
+  forestTiles.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  for (const entry of forestTiles) {
+    const { tile, x, y, screen, tw, th } = entry;
+    if (!isForestClusterVisible(tile.forest, screen, tw, th)) continue;
+    if (!drawForestClusterSprite(tile.forest, screen, tw, th)) {
+      drawProceduralForestCluster(tile.forest, x, y, screen, tw, th);
+    }
+  }
+}
+
+function drawForestClusterSprite(forest, p, tw, th) {
+  const image = terrainAssets.forestClusters;
+  const sheet = terrainAssetFiles.forestClusters;
+  if (!assetLoaded(image) || !sheet) return false;
+  const cell = forest.variant % (sheet.cols * sheet.rows);
+  const sx = (cell % sheet.cols) * image.naturalWidth / sheet.cols;
+  const sy = Math.floor(cell / sheet.cols) * image.naturalHeight / sheet.rows;
+  const sw = image.naturalWidth / sheet.cols;
+  const sh = image.naturalHeight / sheet.rows;
+  const width = tw * 1.46 * forest.scale;
+  const height = th * 2.75 * forest.scale;
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.drawImage(image, sx, sy, sw, sh, p.x - width / 2, p.y + th * 0.68 - height, width, height);
+  ctx.restore();
+  return true;
+}
+
+function drawProceduralForestCluster(forest, x, y, p, tw, th) {
+  ctx.save();
+  ctx.globalAlpha = 0.86;
+  for (let i = 0; i < forest.density; i++) {
+    const seed = hash2(x + i * 3, y - i * 5, WORLD_SEED + 181);
+    const px = p.x + (seed - 0.5) * tw * 0.74;
+    const py = p.y + th * (0.3 + hash2(x - i * 7, y + i * 2, WORLD_SEED + 191) * 0.42);
+    const h = th * (1.08 + hash2(x + i, y + i, WORLD_SEED + 197) * 0.82) * forest.scale;
+    const crown = h * (0.22 + seed * 0.08);
+    ctx.fillStyle = forest.variant % 2 ? "#111c13" : "#172414";
+    ctx.beginPath();
+    ctx.ellipse(px, py - h * 0.62, crown * 0.85, crown * 1.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#23351d";
+    ctx.beginPath();
+    ctx.ellipse(px - crown * 0.22, py - h * 0.72, crown * 0.72, crown * 0.92, -0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#2b1f16";
+    ctx.lineWidth = Math.max(1, state.camera.zoom * 2);
+    ctx.beginPath();
+    ctx.moveTo(px, py - h * 0.5);
+    ctx.lineTo(px + (seed - 0.5) * 8 * state.camera.zoom, py);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function isForestClusterVisible(forest, p, tw, th) {
+  const width = tw * 1.46 * forest.scale;
+  const height = th * 2.75 * forest.scale;
+  return isScreenRectVisible(p.x - width / 2, p.y + th * 0.68 - height, width, height);
+}
+
+function drawTileDiamond(p, tw, th, fillStyle) {
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + tw / 2, p.y + th / 2);
+  ctx.lineTo(p.x, p.y + th);
+  ctx.lineTo(p.x - tw / 2, p.y + th / 2);
+  ctx.closePath();
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+}
+
+function addTileDiamondToPath(path, p, tw, th) {
+  path.moveTo(p.x, p.y);
+  path.lineTo(p.x + tw / 2, p.y + th / 2);
+  path.lineTo(p.x, p.y + th);
+  path.lineTo(p.x - tw / 2, p.y + th / 2);
+  path.closePath();
+}
+
+function isScreenRectVisible(x, y, width, height, pad = 0) {
+  return x + width >= -pad && x <= canvas.clientWidth + pad && y + height >= -pad && y <= canvas.clientHeight + pad;
+}
+
+function strokeTileDiamond(p, tw, th) {
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + tw / 2, p.y + th / 2);
+  ctx.lineTo(p.x, p.y + th);
+  ctx.lineTo(p.x - tw / 2, p.y + th / 2);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawClippedTerrainImage(image, p, tw, th, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + tw / 2, p.y + th / 2);
+  ctx.lineTo(p.x, p.y + th);
+  ctx.lineTo(p.x - tw / 2, p.y + th / 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(image, p.x - tw / 2, p.y, tw, th);
+  ctx.restore();
+}
+
+function drawTerrainSheetCell(sheetKey, index, p, tw, th, alpha = 1) {
+  const image = terrainAssets[sheetKey];
+  const sheet = terrainAssetFiles[sheetKey];
+  if (!assetLoaded(image) || !sheet) return false;
+  const total = sheet.cols * sheet.rows;
+  const cell = ((index % total) + total) % total;
+  const sx = (cell % sheet.cols) * image.naturalWidth / sheet.cols;
+  const sy = Math.floor(cell / sheet.cols) * image.naturalHeight / sheet.rows;
+  const sw = image.naturalWidth / sheet.cols;
+  const sh = image.naturalHeight / sheet.rows;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + tw / 2, p.y + th / 2);
+  ctx.lineTo(p.x, p.y + th);
+  ctx.lineTo(p.x - tw / 2, p.y + th / 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(image, sx, sy, sw, sh, p.x - tw / 2, p.y, tw, th);
+  ctx.restore();
+  return true;
+}
+
+function pickSheetCell(sheetKey, x, y, salt = 0) {
+  const sheet = terrainAssetFiles[sheetKey];
+  const total = sheet.cols * sheet.rows;
+  return Math.floor(hash2(x, y, WORLD_SEED + salt) * total) % total;
+}
+
+function drawProceduralGrassOverlay(tile, x, y, p, tw, th) {
+  const roll = hash2(x, y, WORLD_SEED + 71);
+  const density = tile.biome === "deepwood" ? 6 : tile.biome === "marsh" ? 5 : tile.biome === "ruins" ? 3 : 4;
+  ctx.save();
+  ctx.globalAlpha = 0.28;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + tw / 2, p.y + th / 2);
+  ctx.lineTo(p.x, p.y + th);
+  ctx.lineTo(p.x - tw / 2, p.y + th / 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.strokeStyle = tile.biome === "marsh" ? "#4f9b79" : tile.biome === "ruins" ? "#85805f" : "#6fa257";
+  ctx.lineWidth = Math.max(1, state.camera.zoom);
+  for (let i = 0; i < density; i++) {
+    const seed = hash2(x + i, y - i, WORLD_SEED + 73);
+    const px = p.x - tw * 0.34 + ((seed + roll) % 1) * tw * 0.68;
+    const py = p.y + th * 0.28 + hash2(x - i, y + i, WORLD_SEED + 79) * th * 0.42;
+    ctx.beginPath();
+    ctx.moveTo(px, py + 2 * state.camera.zoom);
+    ctx.lineTo(px + (seed - 0.5) * 10 * state.camera.zoom, py - (3 + seed * 5) * state.camera.zoom);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function riverNeighborMask(x, y) {
+  const offsets = [
+    [0, -1], [1, -1], [1, 0], [1, 1],
+    [0, 1], [-1, 1], [-1, 0], [-1, -1]
+  ];
+  return offsets.reduce((mask, [dx, dy], index) => {
+    const neighbor = getTile(x + dx, y + dy);
+    return neighbor && neighbor.water ? mask | (1 << index) : mask;
+  }, 0);
+}
+
+function riverEdgeCellIndex(mask, x, y) {
+  const north = Boolean(mask & 1);
+  const northEast = Boolean(mask & 2);
+  const east = Boolean(mask & 4);
+  const southEast = Boolean(mask & 8);
+  const south = Boolean(mask & 16);
+  const southWest = Boolean(mask & 32);
+  const west = Boolean(mask & 64);
+  const northWest = Boolean(mask & 128);
+  let col = !west ? 0 : !east ? 4 : 2;
+  let row = !north ? 0 : !south ? 4 : 2;
+
+  if (north && east && south && west) {
+    if (!northWest) { row = 0; col = 0; }
+    else if (!northEast) { row = 0; col = 4; }
+    else if (!southEast) { row = 4; col = 4; }
+    else if (!southWest) { row = 4; col = 0; }
+    else {
+      const drift = Math.floor(hash2(x, y, WORLD_SEED + mask) * 5) - 2;
+      row = 2;
+      col = clamp(2 + drift, 0, 4);
+    }
+  }
+
+  return row * 5 + col;
+}
+
+function drawProceduralRiverOverlay(mask, p, tw, th) {
+  drawTileDiamond(p, tw, th, mask === 255 ? "#07515a" : "#064348");
+  ctx.save();
+  ctx.globalAlpha = mask === 255 ? 0.22 : 0.38;
+  ctx.strokeStyle = mask === 255 ? "#5fb9c4" : "#7ba675";
+  ctx.lineWidth = Math.max(1, state.camera.zoom);
+  if ((mask & 1) === 0) drawTileEdge(p, tw, th, 0);
+  if ((mask & 4) === 0) drawTileEdge(p, tw, th, 1);
+  if ((mask & 16) === 0) drawTileEdge(p, tw, th, 2);
+  if ((mask & 64) === 0) drawTileEdge(p, tw, th, 3);
+  ctx.restore();
+}
+
+function drawTileEdge(p, tw, th, edge) {
+  const points = [
+    [p.x, p.y],
+    [p.x + tw / 2, p.y + th / 2],
+    [p.x, p.y + th],
+    [p.x - tw / 2, p.y + th / 2]
+  ];
+  ctx.beginPath();
+  ctx.moveTo(points[edge][0], points[edge][1]);
+  ctx.lineTo(points[(edge + 1) % 4][0], points[(edge + 1) % 4][1]);
+  ctx.stroke();
 }
 
 function biomeColor(biome) {
@@ -1038,7 +1661,7 @@ function assetLoaded(image) {
   return image && image.complete && image.naturalWidth > 0;
 }
 
-function drawBiomeSprite(id, x, y, width, height) {
+function drawBiomeSprite(id, x, y, width, height, dir = 1) {
   const sprite = biomeSprites[id];
   const image = sprite && biomeAssets[sprite.atlas];
   if (!sprite || !assetLoaded(image)) return false;
@@ -1046,7 +1669,11 @@ function drawBiomeSprite(id, x, y, width, height) {
   const z = state.camera.zoom;
   const dw = width * z;
   const dh = height * z;
-  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, x - dw / 2, y - dh * 0.82, dw, dh);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir === -1 ? -1 : 1, 1);
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, -dw / 2, -dh * 0.82, dw, dh);
+  ctx.restore();
   return true;
 }
 
@@ -1054,7 +1681,7 @@ function drawEntities() {
   const entities = [
     ...state.loot.map(l => ({ ...l, kind: "loot", sortY: l.x + l.y })),
     ...state.npcs.map(n => ({ ...n, kind: "npc", sortY: n.x + n.y })),
-    ...(state.animals || []).map(a => ({ ...a, kind: "animal", sortY: a.x + a.y })),
+    ...(state.animals || []).filter(a => !a.dead).map(a => ({ ...a, kind: "animal", sortY: a.x + a.y })),
     ...state.enemies.filter(e => !e.dead).map(e => ({ ...e, kind: "enemy", sortY: e.x + e.y })),
     ...state.heroes.map(hero => ({ ...hero, kind: "player", sprite: hero.id, sortY: hero.x + hero.y + 0.1 }))
   ].sort((a, b) => a.sortY - b.sortY);
@@ -1069,7 +1696,7 @@ function drawActor(actor) {
   const p = worldToScreen(actor.x, actor.y);
   const z = state.camera.zoom;
   if (actor.kind === "animal" && actor.biomeAsset) {
-    drawBiomeSprite(actor.biomeAsset, p.x, p.y + 10 * z, 54, 46);
+    drawBiomeSprite(actor.biomeAsset, p.x, p.y + 10 * z, 54, 46, actor.dir);
     return;
   }
   const bob = Math.sin((actor.walkT || 0) * 2.1) * 4;
@@ -1088,15 +1715,12 @@ function drawActor(actor) {
     ctx.ellipse(0, 16, 31, 13, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
-  if (actor.kind === "enemy") {
-    ctx.strokeStyle = "rgba(178, 34, 34, 0.85)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, -32 + bob, 24 + attack, 0.15, Math.PI - 0.15);
-    ctx.stroke();
-  }
-  drawSprite(actor.sprite, -28 + attack, -76 + bob, 56, 68);
-  if (actor.kind === "player") {
+  const frame = actorSpriteFrame(actor.sprite);
+  const redFlash = actor.kind === "player" && actor.lowHealthHitT > 0 && actor.hp / actor.maxHp <= LOW_HEALTH_FLASH_THRESHOLD && Math.floor(performance.now() / 90) % 2 === 0;
+  if (redFlash) ctx.filter = "brightness(1.25) sepia(1) saturate(7) hue-rotate(-28deg)";
+  drawSprite(actor.sprite, frame.x + attack, frame.y + bob, frame.w, frame.h);
+  if (redFlash) ctx.filter = "none";
+  if (actor.kind === "player" && !spriteLookup[actor.sprite]?.fullBody) {
     drawSprite(actor.equipment.weapon, 13 + attack, -48 + bob, 36, 56);
   }
   ctx.restore();
@@ -1127,15 +1751,61 @@ function drawLoot(loot) {
   drawLabel(itemName(loot.id), p.x, p.y - 44 * z, loot.id === "runeShard" ? "#b16bff" : "#e8c06a");
 }
 
-function drawSprite(id, x, y, w, h) {
+function actorSpriteFrame(id) {
   const sprite = spriteLookup[id];
-  const image = images[sprite?.sheet];
-  if (!sprite || !image || !assetsReady) {
+  return sprite?.draw || { x: -28, y: -76, w: 56, h: 68 };
+}
+
+function drawSprite(id, x, y, w, h) {
+  const drawable = resolveDrawableSprite(id);
+  if (!drawable) {
     ctx.fillStyle = "#c38a2f";
     ctx.fillRect(x, y, w, h);
     return;
   }
+  const { sprite, image } = drawable;
+  if (sprite.keyColor) {
+    const canvas = keyedSpriteCanvas(id, sprite, image);
+    ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, x, y, w, h);
+    return;
+  }
   ctx.drawImage(image, sprite.x, sprite.y, sprite.width || SPRITE_CELL, sprite.height || SPRITE_CELL, x, y, w, h);
+}
+
+function resolveDrawableSprite(id) {
+  const sprite = spriteLookup[id];
+  if (!sprite || !assetsReady) return null;
+  const image = images[sprite.sheet];
+  if (assetLoaded(image)) return { sprite, image };
+  const fallback = sprite.fallback;
+  const fallbackImage = images[fallback?.sheet];
+  if (fallback && assetLoaded(fallbackImage)) return { sprite: fallback, image: fallbackImage };
+  return null;
+}
+
+function keyedSpriteCanvas(id, sprite, image) {
+  if (keyedSpriteCache[id]) return keyedSpriteCache[id];
+  const width = sprite.width || SPRITE_CELL;
+  const height = sprite.height || SPRITE_CELL;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const buffer = canvas.getContext("2d", { willReadFrequently: true });
+  buffer.drawImage(image, sprite.x, sprite.y, width, height, 0, 0, width, height);
+  const pixels = buffer.getImageData(0, 0, width, height);
+  for (let i = 0; i < pixels.data.length; i += 4) {
+    const r = pixels.data[i];
+    const g = pixels.data[i + 1];
+    const b = pixels.data[i + 2];
+    const nearWhite = r > 238 && g > 238 && b > 238 && Math.max(r, g, b) - Math.min(r, g, b) < 18;
+    const nearBlack = r < 8 && g < 8 && b < 8;
+    if ((sprite.keyColor === "white" && nearWhite) || (sprite.keyColor === "black" && nearBlack)) {
+      pixels.data[i + 3] = 0;
+    }
+  }
+  buffer.putImageData(pixels, 0, 0);
+  keyedSpriteCache[id] = canvas;
+  return canvas;
 }
 
 function drawLabel(text, x, y, color) {
@@ -1277,6 +1947,10 @@ function toast(message) {
 
 function renderHud() {
   const p = activeHero();
+  const healthPercent = clamp(p.hp / p.maxHp * 100, 0, 100);
+  const manaPercent = clamp(p.mana / p.maxMana * 100, 0, 100);
+  document.querySelector(".health-orb")?.style.setProperty("--orb-fill", `${healthPercent}%`);
+  document.querySelector(".mana-orb")?.style.setProperty("--orb-fill", `${manaPercent}%`);
   document.getElementById("healthValue").textContent = `${Math.round(p.hp)} / ${p.maxHp}`;
   document.getElementById("manaValue").textContent = `${Math.round(p.mana)} / ${p.maxMana}`;
   document.getElementById("staminaFill").style.width = `${Math.max(0, p.stamina / p.maxStamina * 100)}%`;
@@ -1399,6 +2073,11 @@ function selectItem(id) {
   renderInventory();
 }
 
+function toggleInventory() {
+  document.getElementById("inventoryPanel").classList.toggle("collapsed");
+  updateHudLayout();
+}
+
 function setMode(mode) {
   state.mode = mode;
   document.querySelectorAll(".skill[data-mode]").forEach(btn => btn.classList.toggle("active", btn.dataset.mode === mode));
@@ -1410,6 +2089,7 @@ function handleCanvasClick(event) {
   const sy = event.clientY - rect.top;
   const world = screenToWorld(sx, sy);
   const target = state.enemies
+    .concat(state.animals || [])
     .filter(e => !e.dead)
     .map(e => ({ e, d: Math.hypot(e.x - world.x, e.y - world.y) }))
     .sort((a, b) => a.d - b.d)[0];
@@ -1442,7 +2122,7 @@ function bindEvents() {
     }
     if (key === "q") useItem("redPotion");
     if (key === "r") useItem("bluePotion");
-    if (key === "i") document.getElementById("inventoryPanel").classList.toggle("collapsed");
+    if (key === "i") toggleInventory();
     if (key === "e") {
       const npc = nearestNpc();
       if (npc) openChat(npc);
@@ -1461,7 +2141,8 @@ function bindEvents() {
     state.camera.x = activeHero().x;
     state.camera.y = activeHero().y;
   });
-  document.getElementById("toggleInventory").addEventListener("click", () => document.getElementById("inventoryPanel").classList.toggle("collapsed"));
+  document.getElementById("toggleInventory").addEventListener("click", toggleInventory);
+  document.getElementById("inventoryHandle").addEventListener("click", toggleInventory);
   document.getElementById("closeChat").addEventListener("click", () => document.getElementById("chatPanel").classList.remove("open"));
   document.querySelectorAll(".skill[data-mode]").forEach(btn => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
   document.querySelectorAll(".skill[data-use]").forEach(btn => btn.addEventListener("click", () => useItem(btn.dataset.use)));
