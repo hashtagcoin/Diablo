@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-10",
+  "usage": "Original dark-fantasy biome spritesheet atlases for an isometric HTML ARPG. Transparent atlas PNGs were produced from flat magenta chroma-key sources.",
+  "grid": {
+    "columns": 4,
+    "rows": 4,
+    "atlasSize": {
+      "width": 1254,
+      "height": 1254
+    },
+    "approxCellSize": {
+      "width": 313.5,
+      "height": 313.5
+    }
+  },
+  "files": [
+    {
+      "id": "biome_forest_atlas",
+      "file": "biome-forest-atlas.png",
+      "sourceFile": "biome-forest-source-magenta.png",
+      "promptSummary": "4x4 isometric dark-fantasy forest props on flat magenta chroma key: trees, stump, bushes, flowers, mushrooms, rocks, logs, moss, bramble arch, and ferns."
+    },
+    {
+      "id": "biome_village_atlas",
+      "file": "biome-village-atlas.png",
+      "sourceFile": "biome-village-source-magenta.png",
+      "promptSummary": "4x4 isometric dark-fantasy village, ruin, campsite, and supply props on flat magenta chroma key: well, ruins, huts, wagon, signpost, fires, fences, shrine, altar, crates, barrels, sacks, and tower base."
+    },
+    {
+      "id": "biome_creatures_buildings_atlas",
+      "file": "biome-creatures-buildings-atlas.png",
+      "sourceFile": "biome-creatures-buildings-source-magenta.png",
+      "promptSummary": "4x4 dark-fantasy woodland creature silhouettes and ruined building variants on flat magenta chroma key: small animals, ravens, deer, wolf, boar, skull props, blacksmith shed, chapel wall, cabin, barn, foundation, and gate arch."
+    }
+  ],
+  "sprites": [
+    { "id": "forest_ancient_dead_pine", "kind": "tree", "atlas": "biome-forest-atlas.png", "cell": { "col": 0, "row": 0 }, "approxRect": { "x": 0, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Ancient dead pine tree, isometric dark-fantasy forest sprite." },
+    { "id": "forest_twisted_green_black_tree", "kind": "tree", "atlas": "biome-forest-atlas.png", "cell": { "col": 1, "row": 0 }, "approxRect": { "x": 314, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Twisted green-black forest tree, hand-painted isometric sprite." },
+    { "id": "forest_leafless_cursed_tree", "kind": "tree", "atlas": "biome-forest-atlas.png", "cell": { "col": 2, "row": 0 }, "approxRect": { "x": 627, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Leafless cursed tree with readable grim silhouette." },
+    { "id": "forest_chopped_stump", "kind": "stump", "atlas": "biome-forest-atlas.png", "cell": { "col": 3, "row": 0 }, "approxRect": { "x": 941, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Chopped stump with axe marks, mossy dark woodland style." },
+    { "id": "forest_thorn_bush", "kind": "bush", "atlas": "biome-forest-atlas.png", "cell": { "col": 0, "row": 1 }, "approxRect": { "x": 0, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Thorn bush for cursed forest terrain dressing." },
+    { "id": "forest_berry_bush", "kind": "bush", "atlas": "biome-forest-atlas.png", "cell": { "col": 1, "row": 1 }, "approxRect": { "x": 314, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Berry bush with dark foliage and muted red accents." },
+    { "id": "forest_wildflower_clump", "kind": "flower", "atlas": "biome-forest-atlas.png", "cell": { "col": 2, "row": 1 }, "approxRect": { "x": 627, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Small wildflower clump for grim woodland biome contrast." },
+    { "id": "forest_glowing_blue_mushrooms", "kind": "mushroom", "atlas": "biome-forest-atlas.png", "cell": { "col": 3, "row": 1 }, "approxRect": { "x": 941, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Glowing blue mushroom cluster with subtle magical light." },
+    { "id": "forest_red_cap_mushrooms", "kind": "mushroom", "atlas": "biome-forest-atlas.png", "cell": { "col": 0, "row": 2 }, "approxRect": { "x": 0, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Red cap mushroom cluster, dark hand-painted forest sprite." },
+    { "id": "forest_mossy_boulder_cluster", "kind": "rock", "atlas": "biome-forest-atlas.png", "cell": { "col": 1, "row": 2 }, "approxRect": { "x": 314, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Mossy boulder cluster, cold stone with forest moss." },
+    { "id": "forest_jagged_slate_rocks", "kind": "rock", "atlas": "biome-forest-atlas.png", "cell": { "col": 2, "row": 2 }, "approxRect": { "x": 627, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Jagged slate rocks with sharp dark-fantasy profile." },
+    { "id": "forest_fallen_log", "kind": "log", "atlas": "biome-forest-atlas.png", "cell": { "col": 3, "row": 2 }, "approxRect": { "x": 941, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Fallen log with bark texture and moss." },
+    { "id": "forest_hollow_log", "kind": "log", "atlas": "biome-forest-atlas.png", "cell": { "col": 0, "row": 3 }, "approxRect": { "x": 0, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Hollow log terrain prop with dark interior." },
+    { "id": "forest_moss_roots_patch", "kind": "ground_prop", "atlas": "biome-forest-atlas.png", "cell": { "col": 1, "row": 3 }, "approxRect": { "x": 314, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Small moss patch with tangled roots." },
+    { "id": "forest_bramble_arch", "kind": "bramble", "atlas": "biome-forest-atlas.png", "cell": { "col": 2, "row": 3 }, "approxRect": { "x": 627, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Bramble arch for haunted woodland passage dressing." },
+    { "id": "forest_dark_fern_cluster", "kind": "fern", "atlas": "biome-forest-atlas.png", "cell": { "col": 3, "row": 3 }, "approxRect": { "x": 941, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Dark fern cluster with layered leaves." },
+
+    { "id": "village_old_stone_well", "kind": "well", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 0 }, "approxRect": { "x": 0, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Old stone well with wooden roof, isometric ruin prop." },
+    { "id": "village_ruined_cottage_corner", "kind": "ruin", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 0 }, "approxRect": { "x": 314, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Ruined cottage wall corner with mossy stone." },
+    { "id": "village_collapsed_house", "kind": "building", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 0 }, "approxRect": { "x": 627, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Collapsed village house variant in gloomy woodland style." },
+    { "id": "village_gloomy_woodland_hut", "kind": "building", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 0 }, "approxRect": { "x": 941, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Intact gloomy woodland hut for biome village dressing." },
+    { "id": "village_broken_wagon", "kind": "wagon", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 1 }, "approxRect": { "x": 0, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Broken medieval wagon with weathered wood and rust." },
+    { "id": "village_blank_signpost", "kind": "signpost", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 1 }, "approxRect": { "x": 314, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Weathered blank signpost, no readable text." },
+    { "id": "village_extinguished_campfire", "kind": "campfire", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 1 }, "approxRect": { "x": 627, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Extinguished campfire ring with ash and stones." },
+    { "id": "village_lit_campfire", "kind": "campfire", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 1 }, "approxRect": { "x": 941, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Lit campfire with contained flame and ember glow." },
+    { "id": "village_broken_fence_segment", "kind": "fence", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 2 }, "approxRect": { "x": 0, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Broken wooden fence segment, dark-fantasy village prop." },
+    { "id": "village_crooked_fence_corner", "kind": "fence", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 2 }, "approxRect": { "x": 314, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Crooked fence corner for village boundaries." },
+    { "id": "village_forest_shrine", "kind": "shrine", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 2 }, "approxRect": { "x": 627, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Small forest shrine with candle glow." },
+    { "id": "village_cracked_stone_altar", "kind": "shrine", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 2 }, "approxRect": { "x": 941, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Cracked stone altar with moss and grim mood." },
+    { "id": "village_stacked_crates", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 3 }, "approxRect": { "x": 0, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Stacked wooden crates with worn edges." },
+    { "id": "village_barrels_cluster", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 3 }, "approxRect": { "x": 314, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Cluster of old barrels with iron bands." },
+    { "id": "village_supply_pile", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 3 }, "approxRect": { "x": 627, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Supply pile with sacks and rope." },
+    { "id": "village_ruined_watchtower_base", "kind": "ruin", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 3 }, "approxRect": { "x": 941, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Ruined watchtower base with stone and timber remnants." },
+
+    { "id": "creature_small_rabbit_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 0, "row": 0 }, "approxRect": { "x": 0, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Small rabbit-like woodland animal silhouette." },
+    { "id": "creature_small_fox_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 1, "row": 0 }, "approxRect": { "x": 314, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Small fox-like woodland animal silhouette." },
+    { "id": "creature_perched_raven", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 2, "row": 0 }, "approxRect": { "x": 627, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Perched raven-like black bird silhouette." },
+    { "id": "creature_raven_side_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 3, "row": 0 }, "approxRect": { "x": 941, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Raven-like side silhouette for woodland ambience." },
+    { "id": "creature_deer_standing_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 0, "row": 1 }, "approxRect": { "x": 0, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Standing deer silhouette with subtle muted highlights." },
+    { "id": "creature_deer_skull_antlers", "kind": "bone_prop", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 1, "row": 1 }, "approxRect": { "x": 314, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Deer skull and antlers ground prop." },
+    { "id": "creature_wolf_prowling_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 2, "row": 1 }, "approxRect": { "x": 627, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Prowling wolf silhouette with dark rim light." },
+    { "id": "creature_wolf_howling_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 3, "row": 1 }, "approxRect": { "x": 941, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Howling wolf silhouette for haunted forest mood." },
+    { "id": "creature_boar_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 0, "row": 2 }, "approxRect": { "x": 0, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Boar silhouette, sturdy readable profile." },
+    { "id": "creature_boar_skull_tusk_prop", "kind": "bone_prop", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 1, "row": 2 }, "approxRect": { "x": 314, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Boar skull with tusks as grim woodland ground prop." },
+    { "id": "building_ruined_blacksmith_shed", "kind": "building", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 2, "row": 2 }, "approxRect": { "x": 627, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Ruined blacksmith shed with dark timber and stone." },
+    { "id": "building_ruined_chapel_wall", "kind": "building", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 3, "row": 2 }, "approxRect": { "x": 941, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Ruined chapel wall variant for haunted village biome." },
+    { "id": "building_small_hunter_cabin", "kind": "building", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 0, "row": 3 }, "approxRect": { "x": 0, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Small hunter cabin, biome-fitting woodland structure." },
+    { "id": "building_collapsed_barn", "kind": "building", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 1, "row": 3 }, "approxRect": { "x": 314, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Collapsed barn variant with weathered planks." },
+    { "id": "building_mossy_stone_foundation", "kind": "ruin", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 2, "row": 3 }, "approxRect": { "x": 627, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Mossy stone house foundation ruin." },
+    { "id": "building_ruined_village_gate_arch", "kind": "ruin", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 3, "row": 3 }, "approxRect": { "x": 941, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Ruined village gate arch with grim woodland tone." }
+  ]
+}

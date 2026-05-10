@@ -3,14 +3,41 @@ const ctx = canvas.getContext("2d");
 const miniMap = document.getElementById("miniMap");
 const miniCtx = miniMap.getContext("2d");
 
-const STORAGE_KEY = "umbral-descent-save-v1";
+const STORAGE_KEY = "umbral-descent-save-v2";
 const TILE_W = 84;
 const TILE_H = 42;
-const MAP_W = 24;
-const MAP_H = 24;
+const CHUNK_SIZE = 16;
+const CHUNK_RADIUS = 3;
+const WORLD_SEED = 93217;
 const SPRITE_CELL = 128;
 const ATLAS_DISPLAY = 322;
 const ATLAS_SIZE = 736;
+
+function makeHero(id, name, x, y, stats, equipment, inventory) {
+  return {
+    id,
+    name,
+    x,
+    y,
+    tx: x,
+    ty: y,
+    hp: stats.hp,
+    maxHp: stats.hp,
+    mana: stats.mana,
+    maxMana: stats.mana,
+    stamina: stats.stamina,
+    maxStamina: stats.stamina,
+    gold: stats.gold || 0,
+    runes: 0,
+    level: 1,
+    xp: 0,
+    dir: 1,
+    walkT: 0,
+    attackT: 0,
+    equipment,
+    inventory
+  };
+}
 
 const atlasFiles = {
   items: "items.png",
@@ -55,6 +82,8 @@ const fallbackSprites = {
 
 const images = {};
 const worldAssets = {};
+const biomeAssets = {};
+const biomeSprites = {};
 const spriteLookup = {};
 let assetsReady = false;
 
@@ -69,53 +98,47 @@ const generatedWorldFiles = {
   backdrop: "assets/world/backdrop.png"
 };
 
+const starterInventory = [
+  { id: "redPotion", qty: 3 },
+  { id: "bluePotion", qty: 2 },
+  { id: "greenPotion", qty: 2 },
+  { id: "runeShard", qty: 1 },
+  { id: "crossbow", qty: 1 },
+  { id: "leatherArmor", qty: 1 }
+];
+
 const state = {
   camera: { x: 0, y: 0, zoom: 1 },
   keys: new Set(),
   mode: "melee",
   selectedItem: null,
+  draggedItem: null,
   lastSave: 0,
   inside: null,
-  player: {
-    id: "alaric",
-    name: "Alaric",
-    x: 10,
-    y: 14,
-    tx: 10,
-    ty: 14,
-    hp: 120,
-    maxHp: 120,
-    mana: 80,
-    maxMana: 80,
-    stamina: 100,
-    maxStamina: 100,
-    gold: 48,
-    runes: 0,
-    level: 1,
-    xp: 0,
-    dir: 1,
-    walkT: 0,
-    attackT: 0,
-    equipment: { weapon: "flameSword", helm: "helm", chest: "armor", gloves: null, boots: null, trinket: "amulet", offhand: null },
-    inventory: [
-      { id: "redPotion", qty: 3 },
-      { id: "bluePotion", qty: 2 },
-      { id: "greenPotion", qty: 2 },
-      { id: "runeShard", qty: 1 },
-      { id: "crossbow", qty: 1 },
-      { id: "leatherArmor", qty: 1 }
-    ]
-  },
+  activeHeroId: "alaric",
+  heroes: [
+    makeHero("alaric", "Alaric", 10, 14, { hp: 120, mana: 80, stamina: 100, gold: 48 }, { weapon: "flameSword", helm: "helm", chest: "armor", gloves: null, boots: null, trinket: "amulet", offhand: null }, starterInventory.map(item => ({ ...item }))),
+    makeHero("sable", "Sable", 9.3, 14.8, { hp: 96, mana: 44, stamina: 125, gold: 0 }, { weapon: "shadowDagger", helm: null, chest: "leatherArmor", gloves: null, boots: null, trinket: null, offhand: null }, [{ id: "greenPotion", qty: 1 }, { id: "shadowDagger", qty: 1 }]),
+    makeHero("rowan", "Rowan", 10.8, 15.1, { hp: 104, mana: 62, stamina: 115, gold: 0 }, { weapon: "bow", helm: null, chest: "leatherArmor", gloves: null, boots: null, trinket: null, offhand: null }, [{ id: "bluePotion", qty: 1 }, { id: "bow", qty: 1 }])
+  ],
+  chunks: new Map(),
+  chunkOrder: [],
+  worldEdits: {},
   enemies: [],
   npcs: [],
+  buildings: [],
   loot: [],
   projectiles: [],
   particles: [],
   floating: [],
-  buildings: [],
-  map: [],
   quest: { temple: false, priest: false }
 };
+
+Object.defineProperty(state, "player", {
+  get() {
+    return activeHero();
+  }
+});
 
 const itemInfo = {
   redPotion: { name: "Blood Vial", type: "potion", text: "Restores 35 health.", use: () => heal("hp", 35) },
@@ -130,6 +153,7 @@ const itemInfo = {
   amulet: { name: "Amulet of the Owl", type: "trinket", text: "Keeps old secrets close to the heart.", slot: "trinket" },
   staff: { name: "Graven Staff", type: "weapon", text: "A staff still full of hostile sparks.", slot: "weapon" },
   bow: { name: "Thorn Bow", type: "weapon", text: "A quick bow cut from living blackwood.", slot: "weapon" },
+  shadowDagger: { name: "Shadow Dagger", type: "weapon", text: "A quick blade for close combat.", slot: "weapon" },
   coinStack: { name: "Gold", type: "currency", text: "Spend it with merchants, once they trust you." }
 };
 
@@ -156,6 +180,20 @@ async function loadAssets() {
     image.src = src;
     worldAssets[key] = image;
   });
+  try {
+    const res = await fetch("assets/biome/manifest.json");
+    const manifest = await res.json();
+    for (const file of manifest.files || []) {
+      const image = new Image();
+      image.src = `assets/biome/${file.file}`;
+      biomeAssets[file.file] = image;
+    }
+    for (const sprite of manifest.sprites || []) {
+      biomeSprites[sprite.id] = sprite;
+    }
+  } catch (error) {
+    console.warn("Biome manifest failed, using procedural color props only.", error);
+  }
 
   try {
     const res = await fetch("sprite-lookup.json");
@@ -172,7 +210,7 @@ async function loadAssets() {
   }
 
   applySpriteStyles();
-  await Promise.all([...Object.values(images), ...Object.values(worldAssets)].map(img => img.decode().catch(() => undefined)));
+  await Promise.all([...Object.values(images), ...Object.values(worldAssets), ...Object.values(biomeAssets)].map(img => img.decode().catch(() => undefined)));
   assetsReady = true;
 }
 
@@ -188,37 +226,209 @@ function applySpriteStyles() {
   });
 }
 
+function activeHero() {
+  return state.heroes.find(hero => hero.id === state.activeHeroId) || state.heroes[0];
+}
+
+function setActiveHero(id) {
+  if (!state.heroes.some(hero => hero.id === id)) return;
+  state.activeHeroId = id;
+  state.selectedItem = null;
+  document.querySelectorAll(".party-member").forEach(member => {
+    member.classList.toggle("active", member.dataset.hero === id);
+  });
+  renderHud();
+  renderInventory();
+  toast(`${activeHero().name} selected.`);
+}
+
+function hash2(x, y, seed = WORLD_SEED) {
+  let h = seed ^ Math.imul(x, 374761393) ^ Math.imul(y, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+function chunkKey(cx, cy) {
+  return `${cx},${cy}`;
+}
+
+function worldEditKey(prefix, id) {
+  return `${prefix}:${id}`;
+}
+
+function getBiome(x, y) {
+  const moisture = hash2(Math.floor((x + 3000) / 14), Math.floor(y / 14), WORLD_SEED + 3);
+  const age = hash2(Math.floor(x / 22), Math.floor((y - 3000) / 22), WORLD_SEED + 7);
+  const shadow = hash2(Math.floor((x - 1000) / 30), Math.floor((y + 1000) / 30), WORLD_SEED + 11);
+  if (moisture > 0.78) return "marsh";
+  if (age > 0.72) return "ruins";
+  if (shadow > 0.74) return "deepwood";
+  return "grove";
+}
+
+function tileFromSeed(x, y) {
+  const biome = getBiome(x, y);
+  const river = Math.abs(Math.sin((x + y * 0.42) * 0.105) + (hash2(Math.floor(x / 9), Math.floor(y / 9), WORLD_SEED + 19) - 0.5) * 0.6) < 0.08;
+  const road = Math.abs(x - y + 4) < 1.25 || Math.abs(Math.sin((x + y) * 0.055)) < 0.035;
+  const propRoll = hash2(x, y, WORLD_SEED + 29);
+  const dense = biome === "deepwood" ? 0.86 : biome === "ruins" ? 0.9 : 0.93;
+  return {
+    x,
+    y,
+    biome,
+    water: river && !road,
+    road,
+    prop: !river && !road && propRoll > dense ? pickPropForTile(biome, x, y) : null
+  };
+}
+
+function pickPropForTile(biome, x, y) {
+  const roll = hash2(x, y, WORLD_SEED + 31);
+  const forest = ["forest_ancient_dead_pine", "forest_twisted_green_black_tree", "forest_leafless_cursed_tree", "forest_thorn_bush", "forest_berry_bush", "forest_glowing_blue_mushrooms", "forest_mossy_boulder_cluster", "forest_fallen_log", "forest_dark_fern_cluster"];
+  const ruins = ["village_broken_wagon", "village_old_stone_well", "village_ruined_cottage_corner", "village_cracked_stone_altar", "village_stacked_crates", "village_barrels_cluster", "building_mossy_stone_foundation"];
+  const marsh = ["forest_hollow_log", "forest_moss_roots_patch", "forest_bramble_arch", "forest_red_cap_mushrooms", "forest_jagged_slate_rocks"];
+  const pool = biome === "ruins" ? ruins : biome === "marsh" ? marsh : forest;
+  return pool[Math.floor(roll * pool.length) % pool.length];
+}
+
+function getChunk(cx, cy) {
+  const key = chunkKey(cx, cy);
+  if (!state.chunks.has(key)) {
+    state.chunks.set(key, generateChunk(cx, cy));
+    state.chunkOrder.push(key);
+    trimChunks();
+  }
+  return state.chunks.get(key);
+}
+
+function getTile(x, y) {
+  const tx = Math.floor(x);
+  const ty = Math.floor(y);
+  const cx = Math.floor(tx / CHUNK_SIZE);
+  const cy = Math.floor(ty / CHUNK_SIZE);
+  return getChunk(cx, cy).tiles.get(`${tx},${ty}`);
+}
+
+function generateChunk(cx, cy) {
+  const chunk = { cx, cy, tiles: new Map(), buildings: [], enemies: [], npcs: [], animals: [] };
+  const startX = cx * CHUNK_SIZE;
+  const startY = cy * CHUNK_SIZE;
+  for (let y = startY; y < startY + CHUNK_SIZE; y++) {
+    for (let x = startX; x < startX + CHUNK_SIZE; x++) {
+      chunk.tiles.set(`${x},${y}`, tileFromSeed(x, y));
+    }
+  }
+  seedChunkEntities(chunk);
+  return chunk;
+}
+
+function seedChunkEntities(chunk) {
+  const { cx, cy } = chunk;
+  if (cx === 0 && cy === 0) {
+    chunk.buildings.push(
+      { id: "temple", name: "Temple Depths", x: 6, y: 6, w: 4, h: 3, open: false, asset: "temple" },
+      { id: "forge", name: "Blackened Forge", x: 15, y: 9, w: 3, h: 3, open: true, asset: "forge" },
+      { id: "sanctum", name: "Moonlit Sanctum", x: 11, y: 18, w: 4, h: 3, open: true, asset: "sanctum" }
+    );
+    chunk.npcs.push(
+      { id: "questKeeper", name: "Quest Keeper", sprite: "questKeeper", x: 9, y: 13, lines: ["Find the Temple Depths and bring me a Rune Shard.", "The priest listens through the stones. Keep your mana high."] },
+      { id: "healer", name: "Healer", sprite: "healer", x: 13, y: 16, lines: ["Stand still a breath and I can mend the worst of it.", "Ask me to heal and I will spend what herbs remain."] },
+      { id: "merchant", name: "Merchant", sprite: "merchant", x: 17, y: 12, lines: ["Gold has a memory. Spend it well.", "I saw a crossbow buried near the old water stairs."] },
+      { id: "blacksmith", name: "Blacksmith", sprite: "blacksmith", x: 16.5, y: 10.8, lines: ["Blades chip. Armor lies. Boots tell the truth.", "Bring runes and I will wake the metal."] }
+    );
+    chunk.enemies.push(
+      enemy("skeleton", "Skeleton", 4, 12, 56, 8, "coinStack"),
+      enemy("skeleton", "Skeleton", 7, 16, 56, 8, "redPotion"),
+      enemy("emberImp", "Ember Imp", 15, 15, 44, 10, "fireOrb"),
+      enemy("frostAcolyte", "Frost Acolyte", 7, 8, 72, 13, "staff"),
+      enemy("cultist", "Cultist", 20, 14, 68, 12, "runeShard")
+    );
+  }
+
+  const centerX = cx * CHUNK_SIZE + 8;
+  const centerY = cy * CHUNK_SIZE + 8;
+  const distFromSpawn = Math.hypot(centerX - 10, centerY - 14);
+  const biome = getBiome(centerX, centerY);
+  const roll = hash2(cx, cy, WORLD_SEED + 41);
+  if (distFromSpawn > 18 && roll > 0.78) {
+    const assets = biome === "ruins"
+      ? ["building_ruined_chapel_wall", "building_collapsed_barn", "building_ruined_village_gate_arch"]
+      : ["building_small_hunter_cabin", "village_gloomy_woodland_hut", "building_ruined_blacksmith_shed"];
+    chunk.buildings.push({ id: `building-${cx}-${cy}`, name: biome === "ruins" ? "Village Ruin" : "Woodland Shelter", x: centerX - 1.5, y: centerY - 1.5, w: 3, h: 3, open: true, biomeAsset: assets[Math.floor(roll * assets.length) % assets.length] });
+  }
+  if (distFromSpawn > 8 && roll > 0.38) {
+    const enemyType = biome === "marsh" ? ["swampHag", "beastWolf"] : biome === "ruins" ? ["skeleton", "cultist"] : ["goblinRaider", "beastWolf", "emberImp"];
+    const count = roll > 0.82 ? 3 : 2;
+    for (let i = 0; i < count; i++) {
+      const type = enemyType[(i + Math.floor(roll * 10)) % enemyType.length];
+      chunk.enemies.push(enemy(type, enemyName(type), centerX + i * 1.6 - 1.2, centerY + hash2(cx + i, cy, WORLD_SEED + 53) * 4 - 2, type === "beastWolf" ? 52 : 64, 9 + i * 2, roll > 0.75 ? "coinStack" : "redPotion"));
+    }
+  }
+  if (roll < 0.34) {
+    const animals = ["creature_small_rabbit_silhouette", "creature_small_fox_silhouette", "creature_deer_standing_silhouette", "creature_wolf_prowling_silhouette", "creature_boar_silhouette"];
+    chunk.animals.push({ id: `animal-${cx}-${cy}`, name: "Wildlife", biomeAsset: animals[Math.floor(roll * animals.length * 10) % animals.length], x: centerX + 2, y: centerY - 2, walkT: 0, dir: 1, kind: "animal" });
+  }
+}
+
+function trimChunks() {
+  const hero = activeHero();
+  const hcx = Math.floor(hero.x / CHUNK_SIZE);
+  const hcy = Math.floor(hero.y / CHUNK_SIZE);
+  for (const key of [...state.chunks.keys()]) {
+    const [cx, cy] = key.split(",").map(Number);
+    if (Math.abs(cx - hcx) > CHUNK_RADIUS + 2 || Math.abs(cy - hcy) > CHUNK_RADIUS + 2) {
+      state.chunks.delete(key);
+    }
+  }
+  state.chunkOrder = [...state.chunks.keys()];
+}
+
+function refreshActiveWorld() {
+  const hero = activeHero();
+  const hcx = Math.floor(hero.x / CHUNK_SIZE);
+  const hcy = Math.floor(hero.y / CHUNK_SIZE);
+  const chunks = [];
+  for (let cy = hcy - CHUNK_RADIUS; cy <= hcy + CHUNK_RADIUS; cy++) {
+    for (let cx = hcx - CHUNK_RADIUS; cx <= hcx + CHUNK_RADIUS; cx++) {
+      chunks.push(getChunk(cx, cy));
+    }
+  }
+  state.enemies = chunks.flatMap(chunk => chunk.enemies).filter(e => !e.dead && !state.worldEdits[worldEditKey("enemy", e.id)]?.dead);
+  state.npcs = chunks.flatMap(chunk => chunk.npcs);
+  state.buildings = chunks.flatMap(chunk => chunk.buildings);
+  state.animals = chunks.flatMap(chunk => chunk.animals || []);
+}
+
+function visibleTileBounds(pad = 4) {
+  const corners = [
+    screenToWorld(0, 0),
+    screenToWorld(canvas.clientWidth, 0),
+    screenToWorld(0, canvas.clientHeight),
+    screenToWorld(canvas.clientWidth, canvas.clientHeight)
+  ];
+  return {
+    minX: Math.floor(Math.min(...corners.map(p => p.x))) - pad,
+    maxX: Math.ceil(Math.max(...corners.map(p => p.x))) + pad,
+    minY: Math.floor(Math.min(...corners.map(p => p.y))) - pad,
+    maxY: Math.ceil(Math.max(...corners.map(p => p.y))) + pad
+  };
+}
+
+function enemyName(type) {
+  return {
+    beastWolf: "Dread Wolf",
+    goblinRaider: "Raider",
+    swampHag: "Swamp Hag",
+    emberImp: "Ember Imp",
+    skeleton: "Skeleton",
+    cultist: "Cultist"
+  }[type] || "Enemy";
+}
+
 function buildWorld() {
-  state.map = Array.from({ length: MAP_H }, (_, y) => Array.from({ length: MAP_W }, (_, x) => {
-    const edge = x < 2 || y < 2 || x > MAP_W - 3 || y > MAP_H - 3;
-    const water = (x < 5 && y > 16) || (x > 18 && y < 7);
-    const road = Math.abs(x - y + 4) < 2 || Math.abs(x + y - 28) < 2;
-    const propSeed = (x * 31 + y * 17) % 23;
-    const prop = !water && !road && !edge && propSeed > 18 ? ["ruinProp", "deadTree", "obelisk"][propSeed % 3] : null;
-    return { edge, water, road, prop };
-  }));
-
-  state.buildings = [
-    { id: "temple", name: "Temple Depths", x: 6, y: 6, w: 4, h: 3, open: false, sprite: "portalRune" },
-    { id: "forge", name: "Blackened Forge", x: 15, y: 9, w: 3, h: 3, open: true, sprite: "chestIcon" },
-    { id: "sanctum", name: "Moonlit Sanctum", x: 11, y: 18, w: 4, h: 3, open: true, sprite: "mapIcon" }
-  ];
-
-  state.npcs = [
-    { id: "questKeeper", name: "Quest Keeper", sprite: "questKeeper", x: 9, y: 13, lines: ["Find the Temple Depths and bring me a Rune Shard.", "The priest listens through the stones. Keep your mana high."] },
-    { id: "healer", name: "Healer", sprite: "healer", x: 13, y: 16, lines: ["Stand still a breath and I can mend the worst of it.", "Ask me to heal and I will spend what herbs remain."] },
-    { id: "merchant", name: "Merchant", sprite: "merchant", x: 17, y: 12, lines: ["Gold has a memory. Spend it well.", "I saw a crossbow buried near the old water stairs."] },
-    { id: "blacksmith", name: "Blacksmith", sprite: "blacksmith", x: 16.5, y: 10.8, lines: ["Blades chip. Armor lies. Boots tell the truth.", "Bring runes and I will wake the metal."] }
-  ];
-
-  state.enemies = [
-    enemy("skeleton", "Skeleton", 4, 12, 56, 8, "coinStack"),
-    enemy("skeleton", "Skeleton", 7, 16, 56, 8, "redPotion"),
-    enemy("emberImp", "Ember Imp", 15, 15, 44, 10, "fireOrb"),
-    enemy("emberImp", "Ember Imp", 18, 7, 44, 10, "bluePotion"),
-    enemy("frostAcolyte", "Frost Acolyte", 7, 8, 72, 13, "staff"),
-    enemy("cultist", "Cultist", 20, 14, 68, 12, "runeShard")
-  ];
+  state.chunks.clear();
+  state.chunkOrder = [];
+  refreshActiveWorld();
 }
 
 function enemy(sprite, name, x, y, hp, damage, drop) {
@@ -247,13 +457,10 @@ function restoreSave() {
   if (!saved) return;
   try {
     const parsed = JSON.parse(saved);
-    Object.assign(state.player, parsed.player || {});
-    if (Array.isArray(parsed.enemies)) {
-      state.enemies.forEach(enemyState => {
-        const savedEnemy = parsed.enemies.find(e => e.id === enemyState.id);
-        if (savedEnemy) Object.assign(enemyState, savedEnemy);
-      });
-    }
+    if (Array.isArray(parsed.heroes)) state.heroes = parsed.heroes;
+    else if (parsed.player) Object.assign(state.heroes[0], parsed.player);
+    if (parsed.activeHeroId) state.activeHeroId = parsed.activeHeroId;
+    if (parsed.worldEdits) state.worldEdits = parsed.worldEdits;
     if (Array.isArray(parsed.loot)) state.loot = parsed.loot;
     if (parsed.camera) Object.assign(state.camera, parsed.camera);
     if (parsed.quest) Object.assign(state.quest, parsed.quest);
@@ -268,8 +475,9 @@ function saveGame(force = false) {
   if (!force && now - state.lastSave < 1000) return;
   state.lastSave = now;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    player: state.player,
-    enemies: state.enemies.map(({ id, hp, dead, x, y }) => ({ id, hp, dead, x, y })),
+    heroes: state.heroes,
+    activeHeroId: state.activeHeroId,
+    worldEdits: state.worldEdits,
     loot: state.loot,
     camera: state.camera,
     quest: state.quest,
@@ -285,36 +493,36 @@ function resize() {
 }
 
 function worldToScreen(x, y) {
-  const centerX = canvas.clientWidth * 0.48 + state.camera.x;
-  const centerY = canvas.clientHeight * 0.24 + state.camera.y;
+  const centerX = canvas.clientWidth * 0.48;
+  const centerY = canvas.clientHeight * 0.38;
   return {
-    x: centerX + (x - y) * (TILE_W / 2) * state.camera.zoom,
-    y: centerY + (x + y) * (TILE_H / 2) * state.camera.zoom
+    x: centerX + ((x - state.camera.x) - (y - state.camera.y)) * (TILE_W / 2) * state.camera.zoom,
+    y: centerY + ((x - state.camera.x) + (y - state.camera.y)) * (TILE_H / 2) * state.camera.zoom
   };
 }
 
 function screenToWorld(sx, sy) {
-  const centerX = canvas.clientWidth * 0.48 + state.camera.x;
-  const centerY = canvas.clientHeight * 0.24 + state.camera.y;
+  const centerX = canvas.clientWidth * 0.48;
+  const centerY = canvas.clientHeight * 0.38;
   const xIso = (sx - centerX) / state.camera.zoom;
   const yIso = (sy - centerY) / state.camera.zoom;
   return {
-    x: yIso / TILE_H + xIso / TILE_W,
-    y: yIso / TILE_H - xIso / TILE_W
+    x: state.camera.x + yIso / TILE_H + xIso / TILE_W,
+    y: state.camera.y + yIso / TILE_H - xIso / TILE_W
   };
 }
 
 function tileBlocked(x, y) {
   const tx = Math.floor(x);
   const ty = Math.floor(y);
-  if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return true;
-  const tile = state.map[ty][tx];
-  if (tile.water || tile.edge) return true;
+  const tile = getTile(tx, ty);
+  if (!tile || tile.water) return true;
   return state.buildings.some(b => tx >= b.x && ty >= b.y && tx < b.x + b.w && ty < b.y + b.h - 1);
 }
 
 function update(dt) {
-  const player = state.player;
+  refreshActiveWorld();
+  const player = activeHero();
   let dx = 0;
   let dy = 0;
   if (state.keys.has("w")) dy -= 1;
@@ -339,6 +547,10 @@ function update(dt) {
   }
 
   player.attackT = Math.max(0, player.attackT - dt);
+  state.camera.x += (player.x - state.camera.x) * 0.08;
+  state.camera.y += (player.y - state.camera.y) * 0.08;
+  updatePartyFollowers(dt);
+  updateAnimals(dt);
 
   updateEnemies(dt);
   updateProjectiles(dt);
@@ -349,15 +561,62 @@ function update(dt) {
   renderHud();
 }
 
+function updatePartyFollowers(dt) {
+  const leader = activeHero();
+  const offsets = {
+    alaric: { x: -0.8, y: 0.7 },
+    sable: { x: 0.8, y: 0.7 },
+    rowan: { x: 0, y: 1.25 }
+  };
+  for (const hero of state.heroes) {
+    if (hero.id === leader.id) continue;
+    hero.attackT = Math.max(0, hero.attackT - dt);
+    const offset = offsets[hero.id] || { x: 0.8, y: 0.8 };
+    const tx = leader.x + offset.x;
+    const ty = leader.y + offset.y;
+    const dist = Math.hypot(tx - hero.x, ty - hero.y);
+    if (dist > 9) {
+      hero.x = tx;
+      hero.y = ty;
+    } else if (dist > 1.15) {
+      const speed = 2.55 * dt;
+      const nx = hero.x + (tx - hero.x) / dist * speed;
+      const ny = hero.y + (ty - hero.y) / dist * speed;
+      if (!tileBlocked(nx, hero.y)) hero.x = nx;
+      if (!tileBlocked(hero.x, ny)) hero.y = ny;
+      hero.dir = tx >= hero.x ? 1 : -1;
+      hero.walkT += dt * 8;
+    }
+  }
+}
+
+function updateAnimals(dt) {
+  for (const animal of state.animals || []) {
+    const hero = activeHero();
+    const dist = distance(animal, hero);
+    if (dist < 4) {
+      const dx = (animal.x - hero.x) / Math.max(0.1, dist);
+      const dy = (animal.y - hero.y) / Math.max(0.1, dist);
+      const nx = animal.x + dx * dt * 1.4;
+      const ny = animal.y + dy * dt * 1.4;
+      if (!tileBlocked(nx, animal.y)) animal.x = nx;
+      if (!tileBlocked(animal.x, ny)) animal.y = ny;
+      animal.walkT += dt * 5;
+      animal.dir = dx >= 0 ? 1 : -1;
+    }
+  }
+}
+
 function updateEnemies(dt) {
   for (const e of state.enemies) {
     if (e.dead) continue;
     e.cooldown = Math.max(0, e.cooldown - dt);
     e.attackT = Math.max(0, e.attackT - dt);
-    const dist = distance(e, state.player);
+    const targetHero = nearestHero(e);
+    const dist = distance(e, targetHero);
     if (dist < e.aggro && dist > e.attackRange) {
-      const dx = (state.player.x - e.x) / dist;
-      const dy = (state.player.y - e.y) / dist;
+      const dx = (targetHero.x - e.x) / dist;
+      const dy = (targetHero.y - e.y) / dist;
       const nx = e.x + dx * e.speed * dt;
       const ny = e.y + dy * e.speed * dt;
       if (!tileBlocked(nx, e.y)) e.x = nx;
@@ -367,11 +626,18 @@ function updateEnemies(dt) {
     if (dist <= e.attackRange && e.cooldown <= 0) {
       e.cooldown = e.sprite === "frostAcolyte" ? 1.35 : 1.05;
       e.attackT = 0.35;
-      damagePlayer(e.damage);
-      addFloating(`-${e.damage}`, state.player.x, state.player.y, "#ff9b7b");
-      burst(state.player.x, state.player.y, e.sprite === "frostAcolyte" ? "#79d7ff" : "#e14527", 10);
+      damageHero(targetHero, e.damage);
+      addFloating(`-${e.damage}`, targetHero.x, targetHero.y, "#ff9b7b");
+      burst(targetHero.x, targetHero.y, e.sprite === "frostAcolyte" ? "#79d7ff" : "#e14527", 10);
     }
   }
+}
+
+function nearestHero(point) {
+  return state.heroes
+    .filter(hero => hero.hp > 0)
+    .map(hero => ({ hero, d: distance(point, hero) }))
+    .sort((a, b) => a.d - b.d)[0]?.hero || activeHero();
 }
 
 function updateProjectiles(dt) {
@@ -400,19 +666,19 @@ function updateParticles(dt) {
   });
 }
 
-function damagePlayer(amount) {
-  state.player.hp = Math.max(0, state.player.hp - amount);
-  if (state.player.hp <= 0) {
-    state.player.hp = state.player.maxHp;
-    state.player.x = 10;
-    state.player.y = 14;
-    toast("You were pulled back from the brink.");
+function damageHero(hero, amount) {
+  hero.hp = Math.max(0, hero.hp - amount);
+  if (hero.hp <= 0) {
+    hero.hp = hero.maxHp;
+    hero.x = activeHero().x + (hash2(hero.x, hero.y) - 0.5) * 2;
+    hero.y = activeHero().y + 1.2;
+    toast(`${hero.name} was pulled back from the brink.`);
   }
 }
 
 function attack(target = nearestEnemy()) {
   if (!target || target.dead) return;
-  const player = state.player;
+  const player = activeHero();
   const dist = distance(player, target);
   const modes = {
     melee: { range: 1.65, cost: ["stamina", 8], damage: 18, color: "#ffc36a", speed: 4.8 },
@@ -460,8 +726,9 @@ function hitEnemy(target, damage, kind) {
   addFloating(`${crit ? "Crit " : ""}-${finalDamage}`, target.x, target.y, kind === "frost" ? "#b9efff" : "#ffcf75");
   if (target.hp <= 0) {
     target.dead = true;
+    state.worldEdits[worldEditKey("enemy", target.id)] = { dead: true };
     dropLoot(target);
-    state.player.xp += 12;
+    activeHero().xp += 12;
     toast(`${target.name} defeated.`);
   }
 }
@@ -477,13 +744,14 @@ function dropLoot(enemyState) {
 }
 
 function pickupNearbyLoot() {
+  const hero = activeHero();
   state.loot = state.loot.filter(loot => {
-    if (distance(loot, state.player) > 0.8) return true;
+    if (distance(loot, hero) > 0.8) return true;
     if (loot.id === "coinStack") {
-      state.player.gold += loot.qty;
+      hero.gold += loot.qty;
       toast(`Picked up ${loot.qty} gold.`);
     } else {
-      addItem(loot.id, loot.qty);
+      addItem(loot.id, loot.qty, hero);
       toast(`Picked up ${itemName(loot.id)}.`);
     }
     renderInventory();
@@ -491,14 +759,14 @@ function pickupNearbyLoot() {
   });
 }
 
-function addItem(id, qty = 1) {
-  const existing = state.player.inventory.find(i => i.id === id);
+function addItem(id, qty = 1, hero = activeHero()) {
+  const existing = hero.inventory.find(i => i.id === id);
   if (existing && itemInfo[id]?.type === "potion") existing.qty += qty;
-  else state.player.inventory.push({ id, qty });
+  else hero.inventory.push({ id, qty });
 }
 
-function heal(resource, amount) {
-  const p = state.player;
+function heal(resource, amount, hero = activeHero()) {
+  const p = hero;
   if (resource === "hp") p.hp = Math.min(p.maxHp, p.hp + amount);
   if (resource === "mana") p.mana = Math.min(p.maxMana, p.mana + amount);
   if (resource === "stamina") p.stamina = Math.min(p.maxStamina, p.stamina + amount);
@@ -507,15 +775,16 @@ function heal(resource, amount) {
 
 function useItem(id) {
   const item = itemInfo[id];
-  const inv = state.player.inventory.find(i => i.id === id);
+  const hero = activeHero();
+  const inv = hero.inventory.find(i => i.id === id);
   if (!item || !inv) return;
   if (item.slot) {
-    state.player.equipment[item.slot] = id;
+    hero.equipment[item.slot] = id;
     toast(`Equipped ${item.name}.`);
   } else if (item.use && item.use()) {
     inv.qty -= 1;
     toast(`Used ${item.name}.`);
-    if (inv.qty <= 0) state.player.inventory = state.player.inventory.filter(i => i !== inv);
+    if (inv.qty <= 0) hero.inventory = hero.inventory.filter(i => i !== inv);
   }
   renderInventory();
   saveGame(true);
@@ -524,9 +793,10 @@ function useItem(id) {
 function nearestEnemy(range = 8) {
   let best = null;
   let bestDist = range;
+  const hero = activeHero();
   for (const e of state.enemies) {
     if (e.dead) continue;
-    const d = distance(e, state.player);
+    const d = distance(e, hero);
     if (d < bestDist) {
       best = e;
       bestDist = d;
@@ -536,13 +806,15 @@ function nearestEnemy(range = 8) {
 }
 
 function nearestNpc(range = 1.6) {
-  return state.npcs.find(npc => distance(npc, state.player) <= range);
+  const hero = activeHero();
+  return state.npcs.find(npc => distance(npc, hero) <= range);
 }
 
 function nearestBuilding(range = 1.5) {
+  const hero = activeHero();
   return state.buildings.find(b => {
     const door = { x: b.x + b.w / 2, y: b.y + b.h - 0.4 };
-    return distance(door, state.player) <= range;
+    return distance(door, hero) <= range;
   });
 }
 
@@ -601,12 +873,12 @@ function enterBuilding(building = nearestBuilding()) {
 }
 
 function hasItem(id) {
-  return state.player.inventory.some(i => i.id === id && i.qty > 0);
+  return state.heroes.some(hero => hero.inventory.some(i => i.id === id && i.qty > 0));
 }
 
 function updateQuestState() {
   state.quest.temple = state.quest.temple || state.inside === "temple";
-  state.quest.priest = state.quest.priest || state.enemies.some(e => e.sprite === "cultist" && e.dead);
+  state.quest.priest = state.quest.priest || Object.entries(state.worldEdits).some(([key, edit]) => key.includes("cultist") && edit.dead);
   document.getElementById("questTemple").checked = state.quest.temple;
   document.getElementById("questPriest").checked = state.quest.priest;
 }
@@ -639,9 +911,11 @@ function drawBackdrop() {
 }
 
 function drawMap() {
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const tile = state.map[y][x];
+  const bounds = visibleTileBounds();
+  const props = [];
+  for (let y = bounds.minY; y <= bounds.maxY; y++) {
+    for (let x = bounds.minX; x <= bounds.maxX; x++) {
+      const tile = getTile(x, y);
       const p = worldToScreen(x, y);
       const tw = TILE_W * state.camera.zoom;
       const th = TILE_H * state.camera.zoom;
@@ -652,12 +926,12 @@ function drawMap() {
       ctx.lineTo(p.x, p.y + th);
       ctx.lineTo(p.x - tw / 2, p.y + th / 2);
       ctx.closePath();
-      ctx.fillStyle = tile.water ? "#063436" : tile.road ? "#30302a" : tile.edge ? "#101611" : "#1b2119";
+      ctx.fillStyle = tile.water ? "#063436" : tile.road ? "#3a3328" : biomeColor(tile.biome);
       ctx.fill();
       ctx.strokeStyle = "rgba(176, 119, 45, 0.16)";
       ctx.lineWidth = 1;
       ctx.stroke();
-      if (assetLoaded(worldAssets.dungeonFloor) && !tile.water && !tile.edge) {
+      if (assetLoaded(worldAssets.dungeonFloor) && !tile.water) {
         ctx.save();
         ctx.globalAlpha = tile.road ? 0.24 : 0.42;
         ctx.beginPath();
@@ -670,23 +944,38 @@ function drawMap() {
         ctx.drawImage(worldAssets.dungeonFloor, p.x - tw / 2, p.y, tw, th);
         ctx.restore();
       }
-      if (tile.prop && assetLoaded(worldAssets[tile.prop])) {
-        const prop = worldAssets[tile.prop];
-        const size = tile.prop === "obelisk" ? 72 : 62;
-        ctx.drawImage(prop, p.x - size * state.camera.zoom / 2, p.y - size * state.camera.zoom * 0.7, size * state.camera.zoom, size * state.camera.zoom);
-      } else if (tile.prop && !tile.water) {
-        ctx.fillStyle = "rgba(97, 153, 69, 0.34)";
-        ctx.fillRect(p.x - 3, p.y + th / 2 - 2, 6, 4);
+      if (tile.prop && !tile.water) {
+        props.push({ id: tile.prop, x, y, screen: p, tall: tile.prop.includes("tree") || tile.prop.includes("bramble") });
       }
     }
   }
+  props.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  for (const prop of props) {
+    if (!drawBiomeSprite(prop.id, prop.screen.x, prop.screen.y, prop.tall ? 92 : 62, prop.tall ? 110 : 68)) {
+      ctx.fillStyle = "rgba(97, 153, 69, 0.34)";
+      ctx.fillRect(prop.screen.x - 3, prop.screen.y + TILE_H * state.camera.zoom / 2 - 2, 6, 4);
+    }
+  }
+}
+
+function biomeColor(biome) {
+  return {
+    grove: "#1b2119",
+    deepwood: "#111b14",
+    ruins: "#242521",
+    marsh: "#102322"
+  }[biome] || "#1b2119";
 }
 
 function drawBuildings() {
   for (const b of state.buildings) {
     const base = worldToScreen(b.x + b.w / 2 - 0.5, b.y + b.h - 1);
     const z = state.camera.zoom;
-    const generated = worldAssets[b.id];
+    if (b.biomeAsset && drawBiomeSprite(b.biomeAsset, base.x, base.y + 18 * z, 190, 190)) {
+      drawLabel(b.name, base.x, base.y + 52 * z, "#f0c46a");
+      continue;
+    }
+    const generated = worldAssets[b.asset || b.id];
     if (assetLoaded(generated)) {
       const width = b.id === "forge" ? 210 : 250;
       const height = b.id === "forge" ? 190 : 230;
@@ -749,12 +1038,25 @@ function assetLoaded(image) {
   return image && image.complete && image.naturalWidth > 0;
 }
 
+function drawBiomeSprite(id, x, y, width, height) {
+  const sprite = biomeSprites[id];
+  const image = sprite && biomeAssets[sprite.atlas];
+  if (!sprite || !assetLoaded(image)) return false;
+  const rect = sprite.approxRect;
+  const z = state.camera.zoom;
+  const dw = width * z;
+  const dh = height * z;
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, x - dw / 2, y - dh * 0.82, dw, dh);
+  return true;
+}
+
 function drawEntities() {
   const entities = [
     ...state.loot.map(l => ({ ...l, kind: "loot", sortY: l.x + l.y })),
     ...state.npcs.map(n => ({ ...n, kind: "npc", sortY: n.x + n.y })),
+    ...(state.animals || []).map(a => ({ ...a, kind: "animal", sortY: a.x + a.y })),
     ...state.enemies.filter(e => !e.dead).map(e => ({ ...e, kind: "enemy", sortY: e.x + e.y })),
-    { ...state.player, kind: "player", sprite: state.player.id, sortY: state.player.x + state.player.y + 0.1 }
+    ...state.heroes.map(hero => ({ ...hero, kind: "player", sprite: hero.id, sortY: hero.x + hero.y + 0.1 }))
   ].sort((a, b) => a.sortY - b.sortY);
 
   for (const ent of entities) {
@@ -766,6 +1068,10 @@ function drawEntities() {
 function drawActor(actor) {
   const p = worldToScreen(actor.x, actor.y);
   const z = state.camera.zoom;
+  if (actor.kind === "animal" && actor.biomeAsset) {
+    drawBiomeSprite(actor.biomeAsset, p.x, p.y + 10 * z, 54, 46);
+    return;
+  }
   const bob = Math.sin((actor.walkT || 0) * 2.1) * 4;
   const attack = actor.attackT > 0 ? Math.sin(actor.attackT * 24) * 8 : 0;
   ctx.save();
@@ -775,6 +1081,13 @@ function drawActor(actor) {
   ctx.beginPath();
   ctx.ellipse(0, 17, 25, 10, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (actor.kind === "player" && actor.id === state.activeHeroId) {
+    ctx.strokeStyle = "#f0c46a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 16, 31, 13, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   if (actor.kind === "enemy") {
     ctx.strokeStyle = "rgba(178, 34, 34, 0.85)";
     ctx.lineWidth = 3;
@@ -784,7 +1097,7 @@ function drawActor(actor) {
   }
   drawSprite(actor.sprite, -28 + attack, -76 + bob, 56, 68);
   if (actor.kind === "player") {
-    drawSprite(state.player.equipment.weapon, 13 + attack, -48 + bob, 36, 56);
+    drawSprite(actor.equipment.weapon, 13 + attack, -48 + bob, 36, 56);
   }
   ctx.restore();
 
@@ -884,6 +1197,10 @@ function drawInteriorOverlay() {
   ctx.lineWidth = 2;
   ctx.setLineDash([8, 8]);
   const b = state.buildings.find(item => item.id === state.inside);
+  if (!b) {
+    ctx.restore();
+    return;
+  }
   const p = worldToScreen(b.x + b.w / 2 - 0.5, b.y + b.h - 1);
   ctx.strokeRect(p.x - 130 * state.camera.zoom, p.y - 150 * state.camera.zoom, 260 * state.camera.zoom, 170 * state.camera.zoom);
   drawLabel(`Exploring ${b.name}`, p.x, p.y - 170 * state.camera.zoom, "#92eaff");
@@ -894,22 +1211,29 @@ function drawMiniMap() {
   miniCtx.clearRect(0, 0, miniMap.width, miniMap.height);
   miniCtx.fillStyle = "#090b0a";
   miniCtx.fillRect(0, 0, miniMap.width, miniMap.height);
-  const sx = miniMap.width / MAP_W;
-  const sy = miniMap.height / MAP_H;
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const tile = state.map[y][x];
-      miniCtx.fillStyle = tile.water ? "#075462" : tile.road ? "#76684b" : tile.edge ? "#161813" : "#303a24";
+  const hero = activeHero();
+  const radiusX = 22;
+  const radiusY = 15;
+  const sx = miniMap.width / (radiusX * 2 + 1);
+  const sy = miniMap.height / (radiusY * 2 + 1);
+  const originX = Math.floor(hero.x) - radiusX;
+  const originY = Math.floor(hero.y) - radiusY;
+  for (let y = 0; y <= radiusY * 2; y++) {
+    for (let x = 0; x <= radiusX * 2; x++) {
+      const tile = getTile(originX + x, originY + y);
+      miniCtx.fillStyle = tile.water ? "#075462" : tile.road ? "#76684b" : tile.biome === "ruins" ? "#4b4a42" : tile.biome === "marsh" ? "#1e5950" : "#303a24";
       miniCtx.fillRect(x * sx, y * sy, sx + 0.5, sy + 0.5);
     }
   }
   miniCtx.fillStyle = "#d8a73a";
-  for (const b of state.buildings) miniCtx.fillRect(b.x * sx, b.y * sy, b.w * sx, b.h * sy);
+  for (const b of state.buildings) miniCtx.fillRect((b.x - originX) * sx, (b.y - originY) * sy, Math.max(3, b.w * sx), Math.max(3, b.h * sy));
   miniCtx.fillStyle = "#df3b2f";
-  for (const e of state.enemies) if (!e.dead) miniCtx.fillRect(e.x * sx - 2, e.y * sy - 2, 4, 4);
+  for (const e of state.enemies) if (!e.dead) miniCtx.fillRect((e.x - originX) * sx - 2, (e.y - originY) * sy - 2, 4, 4);
+  miniCtx.fillStyle = "#86a6ff";
+  for (const h of state.heroes) miniCtx.fillRect((h.x - originX) * sx - 2, (h.y - originY) * sy - 2, 4, 4);
   miniCtx.fillStyle = "#61d8ff";
   miniCtx.beginPath();
-  miniCtx.arc(state.player.x * sx, state.player.y * sy, 4, 0, Math.PI * 2);
+  miniCtx.arc(radiusX * sx, radiusY * sy, 4, 0, Math.PI * 2);
   miniCtx.fill();
 }
 
@@ -952,52 +1276,120 @@ function toast(message) {
 }
 
 function renderHud() {
-  const p = state.player;
+  const p = activeHero();
   document.getElementById("healthValue").textContent = `${Math.round(p.hp)} / ${p.maxHp}`;
   document.getElementById("manaValue").textContent = `${Math.round(p.mana)} / ${p.maxMana}`;
   document.getElementById("staminaFill").style.width = `${Math.max(0, p.stamina / p.maxStamina * 100)}%`;
-  const activeParty = document.querySelector(".party-member.active");
-  activeParty.querySelector(".health i").style.width = `${p.hp / p.maxHp * 100}%`;
-  activeParty.querySelector(".mana i").style.width = `${p.mana / p.maxMana * 100}%`;
+  document.querySelectorAll(".party-member").forEach(member => {
+    const hero = state.heroes.find(item => item.id === member.dataset.hero);
+    if (!hero) return;
+    member.classList.toggle("active", hero.id === state.activeHeroId);
+    const health = member.querySelector(".health i");
+    const mana = member.querySelector(".mana i");
+    const stamina = member.querySelector(".stamina i");
+    if (health) health.style.width = `${hero.hp / hero.maxHp * 100}%`;
+    if (mana) mana.style.width = `${hero.mana / hero.maxMana * 100}%`;
+    if (stamina) stamina.style.width = `${hero.stamina / hero.maxStamina * 100}%`;
+  });
 }
 
 function renderInventory() {
   const grid = document.getElementById("inventoryGrid");
+  const hero = activeHero();
+  document.querySelector("#inventoryPanel h2").textContent = `${hero.name} Inventory`;
   grid.innerHTML = "";
   const pageSize = 12;
-  const pages = Math.max(1, Math.ceil(state.player.inventory.length / pageSize));
+  const pages = Math.max(1, Math.ceil(hero.inventory.length / pageSize));
   for (let pageIndex = 0; pageIndex < pages; pageIndex++) {
     const page = document.createElement("div");
     page.className = "inventory-page";
-    const items = state.player.inventory.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize);
+    const items = hero.inventory.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize);
     for (let slotIndex = 0; slotIndex < pageSize; slotIndex++) {
       const inv = items[slotIndex];
+      const itemIndex = pageIndex * pageSize + slotIndex;
       const button = document.createElement("button");
       button.className = "inventory-slot";
       if (inv) {
         button.dataset.item = inv.id;
+        button.dataset.index = itemIndex;
+        button.draggable = true;
         button.title = itemName(inv.id);
         if (state.selectedItem === inv.id) button.classList.add("selected");
         button.innerHTML = `<span class="sprite" data-sprite="${inv.id}"></span><small>${inv.qty > 1 ? inv.qty : ""}</small>`;
         button.addEventListener("click", () => selectItem(inv.id));
         button.addEventListener("dblclick", () => useItem(inv.id));
+        button.addEventListener("dragstart", event => {
+          state.draggedItem = { heroId: hero.id, index: itemIndex, id: inv.id };
+          event.dataTransfer.setData("text/plain", JSON.stringify(state.draggedItem));
+        });
       } else {
-        button.disabled = true;
         button.setAttribute("aria-label", "Empty inventory slot");
       }
+      button.addEventListener("dragover", event => event.preventDefault());
+      button.addEventListener("drop", event => {
+        event.preventDefault();
+        moveDraggedToInventory(itemIndex);
+      });
       page.appendChild(button);
     }
     grid.appendChild(page);
   }
   document.querySelectorAll(".equip-slot").forEach(slot => {
-    const id = state.player.equipment[slot.dataset.slot];
+    const id = hero.equipment[slot.dataset.slot];
     const labels = { weapon: "Weapon", helm: "Helm", chest: "Armour", gloves: "Gloves", boots: "Boots", trinket: "Trinket", offhand: "Offhand" };
     const label = labels[slot.dataset.slot] || slot.dataset.slot;
     slot.innerHTML = `<span class="slot-label">${label}</span>${id ? `<span class="sprite" data-sprite="${id}"></span>` : ""}`;
+    slot.addEventListener("dragover", event => event.preventDefault());
+    slot.addEventListener("drop", event => {
+      event.preventDefault();
+      equipDraggedItem(slot.dataset.slot);
+    });
   });
-  document.getElementById("goldCount").textContent = state.player.gold;
-  document.getElementById("runeCount").textContent = state.player.inventory.find(i => i.id === "runeShard")?.qty || 0;
+  document.getElementById("goldCount").textContent = hero.gold;
+  document.getElementById("runeCount").textContent = hero.inventory.find(i => i.id === "runeShard")?.qty || 0;
   applySpriteStyles();
+}
+
+function moveDraggedToInventory(targetIndex) {
+  const drag = state.draggedItem;
+  if (!drag) return;
+  const hero = state.heroes.find(item => item.id === drag.heroId);
+  if (!hero) return;
+  const item = hero.inventory[drag.index];
+  if (!item) return;
+  if (targetIndex >= hero.inventory.length) {
+    hero.inventory.splice(drag.index, 1);
+    hero.inventory.push(item);
+    state.draggedItem = null;
+    renderInventory();
+    saveGame(true);
+    return;
+  }
+  const target = hero.inventory[targetIndex];
+  hero.inventory[targetIndex] = item;
+  if (target) hero.inventory[drag.index] = target;
+  else hero.inventory.splice(drag.index, 1);
+  state.draggedItem = null;
+  renderInventory();
+  saveGame(true);
+}
+
+function equipDraggedItem(slot) {
+  const drag = state.draggedItem;
+  if (!drag) return;
+  const hero = state.heroes.find(item => item.id === drag.heroId);
+  const item = hero?.inventory[drag.index];
+  if (!hero || !item || itemInfo[item.id]?.slot !== slot) {
+    toast("That item does not fit there.");
+    return;
+  }
+  const previous = hero.equipment[slot];
+  hero.equipment[slot] = item.id;
+  hero.inventory.splice(drag.index, 1);
+  if (previous) hero.inventory.push({ id: previous, qty: 1 });
+  state.draggedItem = null;
+  renderInventory();
+  saveGame(true);
 }
 
 function selectItem(id) {
@@ -1023,8 +1415,9 @@ function handleCanvasClick(event) {
     .sort((a, b) => a.d - b.d)[0];
   if (target && target.d < 0.9) attack(target.e);
   else if (!tileBlocked(world.x, world.y)) {
-    state.player.x = state.player.x + (world.x - state.player.x) * 0.12;
-    state.player.y = state.player.y + (world.y - state.player.y) * 0.12;
+    const hero = activeHero();
+    hero.x = hero.x + (world.x - hero.x) * 0.12;
+    hero.y = hero.y + (world.y - hero.y) * 0.12;
   }
 }
 
@@ -1034,6 +1427,15 @@ function bindEvents() {
     const key = event.key.toLowerCase();
     state.keys.add(key);
     if (["1", "2", "3", "4"].includes(key)) setMode(["melee", "ranged", "fire", "frost"][Number(key) - 1]);
+    if (["f1", "f2", "f3"].includes(key)) {
+      event.preventDefault();
+      setActiveHero(state.heroes[Number(key.slice(1)) - 1]?.id);
+    }
+    if (key === "tab") {
+      event.preventDefault();
+      const idx = state.heroes.findIndex(hero => hero.id === state.activeHeroId);
+      setActiveHero(state.heroes[(idx + 1) % state.heroes.length].id);
+    }
     if (key === " ") {
       event.preventDefault();
       attack();
@@ -1056,13 +1458,14 @@ function bindEvents() {
   document.getElementById("zoomIn").addEventListener("click", () => state.camera.zoom = clamp(state.camera.zoom + 0.1, 0.72, 1.55));
   document.getElementById("zoomOut").addEventListener("click", () => state.camera.zoom = clamp(state.camera.zoom - 0.1, 0.72, 1.55));
   document.getElementById("centerView").addEventListener("click", () => {
-    state.camera.x = 0;
-    state.camera.y = 0;
+    state.camera.x = activeHero().x;
+    state.camera.y = activeHero().y;
   });
   document.getElementById("toggleInventory").addEventListener("click", () => document.getElementById("inventoryPanel").classList.toggle("collapsed"));
   document.getElementById("closeChat").addEventListener("click", () => document.getElementById("chatPanel").classList.remove("open"));
   document.querySelectorAll(".skill[data-mode]").forEach(btn => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
   document.querySelectorAll(".skill[data-use]").forEach(btn => btn.addEventListener("click", () => useItem(btn.dataset.use)));
+  document.querySelectorAll(".party-member[data-hero]").forEach(member => member.addEventListener("click", () => setActiveHero(member.dataset.hero)));
   document.getElementById("chatForm").addEventListener("submit", event => {
     event.preventDefault();
     const input = document.getElementById("chatInput");
@@ -1092,6 +1495,9 @@ async function start() {
   resize();
   buildWorld();
   restoreSave();
+  state.camera.x = activeHero().x;
+  state.camera.y = activeHero().y;
+  refreshActiveWorld();
   bindEvents();
   renderInventory();
   renderHud();
