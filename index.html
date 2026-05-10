@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Umbral Descent - HTML ARPG MVP</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="gameShell" class="game-shell">
+    <canvas id="gameCanvas" width="1280" height="720" aria-label="Isometric dungeon game canvas"></canvas>
+
+    <section class="party-panel" aria-label="Party">
+      <div class="party-member active" data-hero="alaric">
+        <div class="portrait sprite" data-sprite="alaric"></div>
+        <div class="party-copy">
+          <strong>Alaric</strong>
+          <span class="mini-bar health"><i style="width:100%"></i></span>
+          <span class="mini-bar mana"><i style="width:100%"></i></span>
+        </div>
+      </div>
+      <div class="party-member" data-hero="sable">
+        <div class="portrait sprite" data-sprite="sable"></div>
+        <div class="party-copy">
+          <strong>Sable</strong>
+          <span class="mini-bar health"><i style="width:100%"></i></span>
+          <span class="mini-bar stamina"><i style="width:100%"></i></span>
+        </div>
+      </div>
+      <div class="party-member" data-hero="rowan">
+        <div class="portrait sprite" data-sprite="rowan"></div>
+        <div class="party-copy">
+          <strong>Rowan</strong>
+          <span class="mini-bar health"><i style="width:100%"></i></span>
+          <span class="mini-bar mana"><i style="width:70%"></i></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="quest-panel panel-metal">
+      <h1>The Weeping Grove</h1>
+      <label><input id="questTemple" type="checkbox"> Find the Temple Depths</label>
+      <label><input id="questPriest" type="checkbox"> Slay a Graven Priest</label>
+    </section>
+
+    <section class="minimap panel-metal" aria-label="Mini map">
+      <canvas id="miniMap" width="210" height="150"></canvas>
+      <div class="zoom-controls">
+        <button id="zoomIn" class="icon-button" title="Zoom in">+</button>
+        <button id="zoomOut" class="icon-button" title="Zoom out">-</button>
+        <button id="centerView" class="icon-button" title="Center on hero">M</button>
+      </div>
+    </section>
+
+    <aside id="inventoryPanel" class="inventory" aria-label="Inventory">
+      <div class="inventory-frame frame-top"></div>
+      <div class="inventory-frame frame-right"></div>
+      <div class="inventory-frame frame-bottom"></div>
+      <div class="inventory-frame frame-left"></div>
+      <div class="inventory-frame corner-tl"></div>
+      <div class="inventory-frame corner-tr"></div>
+      <div class="inventory-frame corner-br"></div>
+      <div class="inventory-frame corner-bl"></div>
+      <div class="inventory-content">
+        <header>
+          <button id="toggleInventory" class="close-button" title="Toggle inventory">X</button>
+          <h2>Inventory</h2>
+        </header>
+
+        <section class="equipment-section" aria-label="Equipped armour and weapons">
+          <button class="equip-slot equip-weapon" data-slot="weapon" title="Weapon">
+            <span class="slot-label">Weapon</span>
+            <span class="sprite" data-sprite="flameSword"></span>
+          </button>
+          <div class="equip-grid">
+            <button class="equip-slot" data-slot="helm" title="Helmet"><span class="slot-label">Helm</span><span class="sprite" data-sprite="helm"></span></button>
+            <button class="equip-slot" data-slot="chest" title="Armour"><span class="slot-label">Armour</span><span class="sprite" data-sprite="armor"></span></button>
+            <button class="equip-slot" data-slot="gloves" title="Gloves"><span class="slot-label">Gloves</span></button>
+            <button class="equip-slot" data-slot="boots" title="Boots"><span class="slot-label">Boots</span></button>
+            <button class="equip-slot" data-slot="trinket" title="Trinket"><span class="slot-label">Trinket</span><span class="sprite" data-sprite="amulet"></span></button>
+            <button class="equip-slot" data-slot="offhand" title="Off hand"><span class="slot-label">Offhand</span></button>
+          </div>
+        </section>
+
+        <div id="itemDetails" class="item-details">
+          <strong>Rune Shard</strong>
+          <span>Select an item to inspect, use, or equip it.</span>
+        </div>
+
+        <section class="bag-section" aria-label="Inventory items">
+          <div id="inventoryGrid" class="inventory-grid"></div>
+        </section>
+
+        <footer class="wallet">
+          <span><b id="goldCount">0</b> gold</span>
+          <span><b id="runeCount">0</b> runes</span>
+        </footer>
+      </div>
+    </aside>
+
+    <section id="chatPanel" class="chat-panel panel-metal">
+      <header>
+        <strong id="chatName">Quest Keeper</strong>
+        <button id="closeChat" class="close-button" title="Close chat">X</button>
+      </header>
+      <div id="chatLog" class="chat-log"></div>
+      <form id="chatForm" class="chat-form">
+        <input id="chatInput" autocomplete="off" placeholder="Ask about quests, trade, heal, or temple">
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+    <div id="lootToast" class="loot-toast"></div>
+    <div id="castLayer" class="cast-layer"></div>
+
+    <footer class="hud">
+      <div class="orb health-orb">
+        <span id="healthValue">120 / 120</span>
+      </div>
+      <div class="skill-bar panel-metal">
+        <button class="skill active" data-mode="melee" title="Melee attack"><span class="sprite" data-sprite="flameSword"></span><kbd>1</kbd></button>
+        <button class="skill" data-mode="ranged" title="Ranged attack"><span class="sprite" data-sprite="crossbow"></span><kbd>2</kbd></button>
+        <button class="skill" data-mode="fire" title="Fire spell"><span class="sprite" data-sprite="fireOrb"></span><kbd>3</kbd></button>
+        <button class="skill" data-mode="frost" title="Frost spell"><span class="sprite" data-sprite="blue"></span><kbd>4</kbd></button>
+        <button class="skill" data-use="redPotion" title="Use health potion"><span class="sprite" data-sprite="redPotion"></span><kbd>Q</kbd></button>
+        <button class="skill" data-use="bluePotion" title="Use mana potion"><span class="sprite" data-sprite="bluePotion"></span><kbd>R</kbd></button>
+      </div>
+      <div class="orb mana-orb">
+        <span id="manaValue">80 / 80</span>
+      </div>
+      <div class="stamina-strip">
+        <span>Stamina</span>
+        <i id="staminaFill"></i>
+      </div>
+    </footer>
+
+    <div class="hint-line">
+      WASD move, mouse wheel zoom, click targets, E talk/enter, I inventory, 1-4 skills, Space attack
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+{
+  "temple": {
+    "file": "temple.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      306,
+      388
+    ]
+  },
+  "forge": {
+    "file": "forge.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      313,
+      350
+    ]
+  },
+  "sanctum": {
+    "file": "sanctum.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      313,
+      368
+    ]
+  },
+  "dungeon-floor": {
+    "file": "dungeon-floor.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      298,
+      251
+    ]
+  },
+  "ruin-prop": {
+    "file": "ruin-prop.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      305,
+      295
+    ]
+  },
+  "dead-tree": {
+    "file": "dead-tree.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      311,
+      380
+    ]
+  },
+  "obelisk": {
+    "file": "obelisk.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      298,
+      400
+    ]
+  },
+  "backdrop-tile": {
+    "file": "backdrop-tile.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a002f291d1c8191ab4cecb3f371a8a6.png",
+    "size": [
+      313,
+      627
+    ]
+  }
+}

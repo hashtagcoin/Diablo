@@ -1,0 +1,111 @@
+{
+  "inventoryPanel": "inventory-panel.png",
+  "hudBar": "hud-bar.png",
+  "healthOrb": "health-orb.png",
+  "manaOrb": "mana-orb.png",
+  "skillSlot": "skill-slot.png",
+  "minimapFrame": "minimap-frame.png",
+  "questPanel": "quest-panel.png",
+  "buttonGold": "button-gold.png",
+  "inventory-frame-top": {
+    "file": "inventory-frame-top.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      322,
+      54
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-frame-right": {
+    "file": "inventory-frame-right.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      54,
+      572
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-frame-bottom": {
+    "file": "inventory-frame-bottom.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      322,
+      54
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-frame-left": {
+    "file": "inventory-frame-left.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      54,
+      572
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-corner-tl": {
+    "file": "inventory-corner-tl.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      54,
+      54
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-corner-tr": {
+    "file": "inventory-corner-tr.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      54,
+      54
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-corner-br": {
+    "file": "inventory-corner-br.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      54,
+      54
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-corner-bl": {
+    "file": "inventory-corner-bl.png",
+    "source": "inventory-panel-frame.png",
+    "size": [
+      54,
+      54
+    ],
+    "derived": "sliced from gridless frame"
+  },
+  "inventory-panel-frame": {
+    "file": "inventory-panel-frame.png",
+    "source": "C:\\Users\\bashi\\.codex\\generated_images\\019e1098-4802-7eb2-abe5-d9cf3314134e\\ig_07afa1ab15bdcf71016a0037b6ee78819189ac40b1b1da787a.png",
+    "size": [
+      430,
+      680
+    ],
+    "purpose": "gridless inventory frame/backing"
+  },
+  "health-orb": {
+    "file": "health-orb.png",
+    "source": "D:\\codex-projects\\Diablo\\assets\\ui\\ui-generated-atlas.png",
+    "size": [
+      374,
+      374
+    ],
+    "recropped": true,
+    "componentCrop": true
+  },
+  "mana-orb": {
+    "file": "mana-orb.png",
+    "source": "D:\\codex-projects\\Diablo\\assets\\ui\\ui-generated-atlas.png",
+    "size": [
+      372,
+      372
+    ],
+    "recropped": true,
+    "componentCrop": true
+  }
+}
