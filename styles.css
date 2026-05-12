@@ -87,6 +87,25 @@ input {
   pointer-events: auto;
 }
 
+.restart-button {
+  position: absolute;
+  right: 236px;
+  top: 12px;
+  z-index: 7;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 14px;
+  color: #ffdf9b;
+  letter-spacing: 0;
+  text-shadow: 0 1px 2px #000;
+  cursor: pointer;
+}
+
+.restart-button:hover {
+  color: #fff4c7;
+  border-color: #b77b2c;
+}
+
 .party-member {
   display: grid;
   grid-template-columns: 62px 1fr;
@@ -350,7 +369,7 @@ input {
   inset: var(--frame-top) var(--frame-x) var(--frame-bottom);
   z-index: 2;
   display: grid;
-  grid-template-rows: 32px 150px 62px 226px 30px;
+  grid-template-rows: 32px 150px 62px 154px 74px 30px;
   gap: 8px;
   min-width: 0;
   overflow: hidden;
@@ -410,7 +429,10 @@ input {
 
 .equip-weapon .sprite {
   --sprite-size: 76px;
-  margin-top: 38px;
+  display: block;
+  margin: 38px auto 0;
+  transform: scale(1.5);
+  transform-origin: center;
 }
 
 .slot-label {
@@ -450,7 +472,7 @@ input {
 
 .bag-section {
   width: 304px;
-  height: 226px;
+  height: 154px;
   justify-self: center;
   overflow-x: auto;
   overflow-y: hidden;
@@ -474,21 +496,41 @@ input {
 
 .inventory-grid {
   width: max-content;
-  height: 226px;
+  height: 154px;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 304px;
-  grid-template-rows: 226px;
+  grid-template-rows: 154px;
   gap: 14px;
   overflow: visible;
 }
 
 .inventory-page {
   width: 304px;
-  height: 226px;
+  height: 154px;
   display: grid;
   grid-template-columns: repeat(4, 70px);
-  grid-template-rows: repeat(3, 70px);
+  grid-template-rows: repeat(2, 70px);
+  gap: 8px;
+}
+
+.skill-library {
+  width: 304px;
+  height: 74px;
+  justify-self: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-color: #a9792c #0a0806;
+  scrollbar-width: thin;
+}
+
+.known-skill-grid {
+  width: max-content;
+  height: 70px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 70px;
+  grid-template-rows: 70px;
   gap: 8px;
 }
 
@@ -509,7 +551,10 @@ input {
 
 .inventory-slot .sprite {
   --sprite-size: 56px;
+  display: block;
   margin-top: 6px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .inventory-slot small {
@@ -664,7 +709,23 @@ input {
 }
 
 .skill .sprite {
-  --sprite-size: 50px;
+  --sprite-size: 56px;
+  display: block;
+  margin: 1px auto 0;
+}
+
+.skill-name {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 3px;
+  overflow: hidden;
+  color: #ffefc6;
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px #000;
 }
 
 kbd {
@@ -791,14 +852,15 @@ kbd {
   border-radius: 50%;
   border: 2px solid currentColor;
   transform: translate(-50%, -50%);
+  transform-origin: center;
   animation: castPulse 520ms ease-out forwards;
   box-shadow: 0 0 18px currentColor;
+  will-change: transform, opacity;
 }
 
 @keyframes castPulse {
   to {
-    width: 104px;
-    height: 104px;
+    transform: translate(-50%, -50%) scale(5.8);
     opacity: 0;
   }
 }

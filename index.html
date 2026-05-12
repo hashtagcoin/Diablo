@@ -43,6 +43,8 @@
       <label><input id="questPriest" type="checkbox"> Slay a Graven Priest</label>
     </section>
 
+    <button id="restartGame" class="restart-button panel-metal" type="button" title="Restart game">Restart</button>
+
     <section class="minimap panel-metal" aria-label="Mini map">
       <canvas id="miniMap" width="210" height="150"></canvas>
       <div class="zoom-controls">
@@ -92,6 +94,10 @@
           <div id="inventoryGrid" class="inventory-grid"></div>
         </section>
 
+        <section class="skill-library" aria-label="Known skills and spells">
+          <div id="knownSkillGrid" class="known-skill-grid"></div>
+        </section>
+
         <footer class="wallet">
           <span><b id="goldCount">0</b> gold</span>
           <span><b id="runeCount">0</b> runes</span>
@@ -118,14 +124,7 @@
       <div class="orb health-orb">
         <span id="healthValue">120 / 120</span>
       </div>
-      <div class="skill-bar panel-metal">
-        <button class="skill active" data-mode="melee" title="Melee attack"><span class="sprite" data-sprite="flameSword"></span><kbd>1</kbd></button>
-        <button class="skill" data-mode="ranged" title="Ranged attack"><span class="sprite" data-sprite="crossbow"></span><kbd>2</kbd></button>
-        <button class="skill" data-mode="fire" title="Fire spell"><span class="sprite" data-sprite="fireOrb"></span><kbd>3</kbd></button>
-        <button class="skill" data-mode="frost" title="Frost spell"><span class="sprite" data-sprite="blue"></span><kbd>4</kbd></button>
-        <button class="skill" data-use="redPotion" title="Use health potion"><span class="sprite" data-sprite="redPotion"></span><kbd>Q</kbd></button>
-        <button class="skill" data-use="bluePotion" title="Use mana potion"><span class="sprite" data-sprite="bluePotion"></span><kbd>R</kbd></button>
-      </div>
+      <div id="skillBar" class="skill-bar panel-metal"></div>
       <div class="orb mana-orb">
         <span id="manaValue">80 / 80</span>
       </div>

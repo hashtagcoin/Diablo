@@ -6,6 +6,8 @@ const miniCtx = miniMap.getContext("2d");
 const STORAGE_KEY = "umbral-descent-save-v2";
 const TILE_W = 84;
 const TILE_H = 42;
+const CAMERA_ANCHOR_X = 0.5;
+const CAMERA_ANCHOR_Y = 0.5;
 const CHUNK_SIZE = 16;
 const CHUNK_RADIUS = 3;
 const WORLD_SEED = 93217;
@@ -14,6 +16,50 @@ const ATLAS_DISPLAY = 322;
 const ATLAS_SIZE = 736;
 const LOW_HEALTH_FLASH_THRESHOLD = 0.35;
 const LOW_HEALTH_FLASH_DURATION = 0.7;
+const ENEMY_DRAW_SCALE = 0.75;
+const WORLD_ITEM_DRAW_SCALE = 1.3;
+const FOREST_TEXTURE_WIDTH_SCALE = 4;
+const FOREST_TEXTURE_HEIGHT_SCALE = 4;
+const FOREST_RENDER_TILE_PAD = 24;
+const PLAYER_ENEMY_SPRITE_Y_OFFSET = 25;
+const CAMERA_MIN_ZOOM = 0.035;
+const CAMERA_MAX_ZOOM = 8;
+const CAMERA_ZOOM_SMOOTHING = 18;
+const CAMERA_FOLLOW_SMOOTHING = 8;
+const MAX_TERRAIN_DRAWS = 1250;
+const MAX_FOREST_DRAWS = 520;
+const MAX_PROP_DRAWS = 360;
+const DETAIL_TEXTURE_MIN_ZOOM = 0.34;
+const TERRAIN_LOD_MIN_ZOOM = 0.22;
+const FOREST_MIN_ZOOM = 0.1;
+const FOREST_FULL_ZOOM = 0.24;
+const PROP_MIN_ZOOM = 0.12;
+const PROP_FULL_ZOOM = 0.3;
+const DECAL_MIN_ZOOM = 0.08;
+const DECAL_FULL_ZOOM = 0.2;
+const FAR_PROP_MIN_RENDER_ZOOM = 0.38;
+const SURFACE_GRASS_MIN_ZOOM = 0.46;
+const SURFACE_GRASS_FULL_ZOOM = 0.62;
+const SURFACE_GRASS_WORLD_WIDTH = 120;
+const MINIMAP_FRAME_MS = 120;
+const HUD_FRAME_MS = 90;
+const SURFACE_GRASS_DECAL_KEYS = ["surfaceGrass1", "surfaceGrass2", "surfaceGrass3", "surfaceGrass4"];
+const OBJECT_COLLISION_RADIUS = 0.46;
+const PROP_COLLISION_RADII = {
+  village_old_stone_well: 0.62,
+  village_broken_wagon: 0.68,
+  village_ruined_cottage_corner: 0.74,
+  village_cracked_stone_altar: 0.58,
+  village_stacked_crates: 0.54,
+  village_barrels_cluster: 0.56,
+  building_mossy_stone_foundation: 0.78,
+  forest_fallen_log: 0.62,
+  forest_hollow_log: 0.58,
+  forest_mossy_boulder_cluster: 0.62,
+  forest_jagged_slate_rocks: 0.58,
+  forest_bramble_arch: 0.54
+};
+const NON_SOLID_PROP_PARTS = ["mushroom", "fern", "roots_patch"];
 
 function makeHero(id, name, x, y, stats, equipment, inventory) {
   return {
@@ -38,7 +84,11 @@ function makeHero(id, name, x, y, stats, equipment, inventory) {
     attackT: 0,
     lowHealthHitT: 0,
     equipment,
-    inventory
+    inventory,
+    skills: {
+      known: ["cleave", "piercingShot", "firebolt", "frostShard", "lightningArc", "stormChain", "arcaneWard", "bloodHex"],
+      bar: ["cleave", "piercingShot", "firebolt", "frostShard", "lightningArc", "redPotion"]
+    }
   };
 }
 
@@ -50,18 +100,32 @@ const atlasFiles = {
   characters: "characters.png",
   heroes: "heroes.webp",
   enemies: "enemies.webp",
-  enemiesCommon: "enemies-common.webp"
+  enemiesCommon: "enemies-common.webp",
+  cyclops: "cyclops.webp",
+  goblinEmperor: "goblinemporer.webp",
+  skills: "skills.png",
+  spells: "spells.png"
 };
 
 const atlasDimensions = {
   items: { width: ATLAS_SIZE, height: ATLAS_SIZE },
-  weapons: { width: ATLAS_SIZE, height: ATLAS_SIZE },
+  weapons: { width: 971, height: 940 },
   armour: { width: ATLAS_SIZE, height: ATLAS_SIZE },
   ui: { width: ATLAS_SIZE, height: ATLAS_SIZE },
   characters: { width: ATLAS_SIZE, height: ATLAS_SIZE },
   heroes: { width: 1140, height: 260 },
   enemies: { width: 1680, height: 700 },
-  enemiesCommon: { width: 1680, height: 373 }
+  enemiesCommon: { width: 1680, height: 373 },
+  cyclops: { width: 440, height: 356 },
+  goblinEmperor: { width: 440, height: 356 },
+  skills: { width: 1120, height: 1120 },
+  spells: { width: 1081, height: 902 }
+};
+
+const atlasGrids = {
+  weapons: { cols: 5, rows: 5 },
+  skills: { cols: 5, rows: 5 },
+  spells: { cols: 6, rows: 5 }
 };
 
 const fallbackSprites = {
@@ -120,6 +184,8 @@ const characterSheetSprites = {
   skeleton: { sheet: "enemies", name: "Wraith", x: 1102, y: 401, width: 217, height: 259, draw: { x: -35, y: -94, w: 70, h: 86 }, keyColor: "white" },
   frostAcolyte: { sheet: "enemies", name: "Frost Wraith", x: 1102, y: 401, width: 217, height: 259, draw: { x: -35, y: -96, w: 70, h: 90 }, keyColor: "white" },
   fireElemental: { sheet: "enemies", name: "Fire Elemental", x: 1408, y: 392, width: 220, height: 288, draw: { x: -34, y: -99, w: 68, h: 92 }, keyColor: "white" },
+  cyclops: { sheet: "cyclops", name: "Cyclops", x: 0, y: 0, width: 440, height: 356, draw: { x: -123, y: -219, w: 246, h: 198 }, keyColor: "black" },
+  goblinEmperor: { sheet: "goblinEmperor", name: "Goblin Emperor", x: 0, y: 0, width: 440, height: 356, draw: { x: -172, y: -300, w: 344, h: 272 }, keyColor: "black" },
   commonOrc: { sheet: "enemiesCommon", name: "Orc Brute", x: 80, y: 25, width: 247, height: 294, draw: { x: -39, y: -89, w: 78, h: 84 } },
   commonGoblin: { sheet: "enemiesCommon", name: "Goblin", x: 421, y: 73, width: 220, height: 267, draw: { x: -34, y: -84, w: 68, h: 78 } },
   commonSkeleton: { sheet: "enemiesCommon", name: "Skeleton Warrior", x: 717, y: 43, width: 223, height: 313, draw: { x: -35, y: -96, w: 70, h: 90 } },
@@ -128,6 +194,8 @@ const characterSheetSprites = {
 };
 
 const commonEnemyTypes = ["commonOrc", "commonGoblin", "commonSkeleton", "commonMummy", "commonNecromancer"];
+const CYCLOPS_SPAWN_MIN_ROLL = 0.93;
+const GOBLIN_EMPEROR_SPAWN_MIN_ROLL = 0.965;
 
 const images = {};
 const worldAssets = {};
@@ -145,8 +213,16 @@ const generatedWorldFiles = {
   ruinProp: "assets/world/ruin-prop.png",
   deadTree: "assets/world/dead-tree.png",
   obelisk: "assets/world/obelisk.png",
-  backdrop: "assets/world/backdrop.png"
+  backdrop: "assets/world/backdrop.png",
+  ruinedVillage: "ruinedvillage.webp"
 };
+
+const ruinedVillageDecals = [
+  { id: "ruinedVillage", name: "Ruined Village", x: 30, y: 24, width: 1260, depth: 54, alpha: 0.96 },
+  { id: "ruinedVillage", name: "Ruined Hamlet", x: -34, y: 42, width: 1040, depth: 48, alpha: 0.92 },
+  { id: "ruinedVillage", name: "Collapsed Village", x: 58, y: -28, width: 1120, depth: 50, alpha: 0.94 },
+  { id: "ruinedVillage", name: "Burned Outpost", x: -52, y: -36, width: 980, depth: 46, alpha: 0.9 }
+];
 
 const terrainAssets = {};
 const terrainAssetFiles = {
@@ -155,7 +231,11 @@ const terrainAssetFiles = {
   grassLarge: { src: "assets/terrain/grass-large.png", cols: 2, rows: 2 },
   forestClusters: { src: "assets/terrain/forest-clusters.png", cols: 2, rows: 2 },
   river: { src: "assets/terrain/river.png", cols: 5, rows: 5 },
-  riverEdge: { src: "assets/terrain/river-edge.png", cols: 5, rows: 5 }
+  riverEdge: { src: "assets/terrain/river-edge.png", cols: 5, rows: 5 },
+  surfaceGrass1: { src: "grass1.webp" },
+  surfaceGrass2: { src: "grass2.webp" },
+  surfaceGrass3: { src: "grass3.webp" },
+  surfaceGrass4: { src: "grass4.webp" }
 };
 
 const starterInventory = [
@@ -168,7 +248,7 @@ const starterInventory = [
 ];
 
 const state = {
-  camera: { x: 0, y: 0, zoom: 1 },
+  camera: { x: 0, y: 0, targetX: 0, targetY: 0, zoom: 1, targetZoom: 1, mode: "follow" },
   keys: new Set(),
   mode: "melee",
   selectedItem: null,
@@ -189,10 +269,16 @@ const state = {
   buildings: [],
   loot: [],
   projectiles: [],
+  spellEffects: [],
   particles: [],
   floating: [],
   blood: [],
   bloodStamp: 0,
+  selectedSkill: null,
+  draggedSkill: null,
+  screenFlash: 0,
+  screenShake: 0,
+  renderShake: { x: 0, y: 0 },
   quest: { temple: false, priest: false }
 };
 
@@ -220,6 +306,20 @@ const itemInfo = {
   coinStack: { name: "Gold", type: "currency", text: "Spend it with merchants, once they trust you." }
 };
 
+const DEFAULT_KNOWN_SKILLS = ["cleave", "piercingShot", "firebolt", "frostShard", "lightningArc", "stormChain", "arcaneWard", "bloodHex"];
+const DEFAULT_SKILL_BAR = ["cleave", "piercingShot", "firebolt", "frostShard", "lightningArc", "redPotion"];
+
+const skillInfo = {
+  cleave: { name: "Cleave", icon: "skillCleave", sheet: "skills", row: 0, column: 0, type: "melee", resource: "stamina", cost: 8, range: 1.75, damage: 22, color: "#ffc36a", buff: "+10% wound chance", text: "A heavy close strike that opens enemies for bleeding." },
+  piercingShot: { name: "Piercing Shot", icon: "skillPiercingShot", sheet: "skills", row: 0, column: 1, type: "projectile", resource: "stamina", cost: 12, range: 7, damage: 16, speed: 3.9, color: "#ffdb8a", buff: "+15% ranged precision", text: "A disciplined shot with a bright trail and armor-punching force." },
+  firebolt: { name: "Firebolt", icon: "spellFirebolt", sheet: "spells", row: 0, column: 0, type: "projectile", resource: "mana", cost: 18, range: 7.5, damage: 28, speed: 2.8, color: "#ff642a", buff: "Ignites for burst damage", text: "Throws a burning orb that bursts against the target." },
+  frostShard: { name: "Frost Shard", icon: "spellFrostShard", sheet: "spells", row: 0, column: 1, type: "projectile", resource: "mana", cost: 15, range: 7, damage: 20, speed: 3, color: "#7fdcff", buff: "Chills enemy movement", text: "Launches a cold shard wrapped in pale mist." },
+  lightningArc: { name: "Lightning Arc", icon: "spellLightningArc", sheet: "spells", row: 0, column: 2, type: "beam", resource: "mana", cost: 20, range: 7.5, damage: 9, duration: 0.54, tickRate: 0.18, color: "#f8fbff", secondaryColor: "#4ed8ff", buff: "Shocks and shakes targets", text: "A jagged bolt that lashes a single enemy several times." },
+  stormChain: { name: "Storm Chain", icon: "spellStormChain", sheet: "spells", row: 0, column: 3, type: "chain", resource: "mana", cost: 34, range: 8, damage: 8, duration: 1.05, tickRate: 0.22, maxTargets: 3, color: "#ffffff", secondaryColor: "#8b7cff", buff: "Chains up to three enemies", text: "Sustains lightning through multiple enemies at once." },
+  arcaneWard: { name: "Arcane Ward", icon: "spellArcaneWard", sheet: "spells", row: 1, column: 0, type: "self", resource: "mana", cost: 14, range: 0, damage: 0, color: "#b16bff", buff: "+20 mana and defensive flash", text: "Focuses a protective pulse around the active hero." },
+  bloodHex: { name: "Blood Hex", icon: "spellBloodHex", sheet: "spells", row: 1, column: 1, type: "beam", resource: "mana", cost: 22, range: 6.5, damage: 11, duration: 0.72, tickRate: 0.24, color: "#12040c", secondaryColor: "#ff2f76", buff: "Occult beam drains vitality", text: "A dark tether that makes the target flicker under pressure." }
+};
+
 function spriteCell(sheet, row, column) {
   return {
     sheet,
@@ -229,6 +329,38 @@ function spriteCell(sheet, row, column) {
     y: 16 + row * 144,
     width: 128,
     height: 128
+  };
+}
+
+function skillAtlasCell(sheet, row, column) {
+  const grid = atlasGrids[sheet] || { cols: 5, rows: 5 };
+  const cellWidth = atlasDimensions[sheet].width / grid.cols;
+  const cellHeight = atlasDimensions[sheet].height / grid.rows;
+  return {
+    sheet,
+    row,
+    column,
+    x: column * cellWidth,
+    y: row * cellHeight,
+    width: cellWidth,
+    height: cellHeight,
+    iconScaleX: 56 / cellWidth,
+    iconScaleY: 56 / cellHeight
+  };
+}
+
+function gridAtlasCell(sheet, row, column) {
+  const grid = atlasGrids[sheet];
+  const cellWidth = atlasDimensions[sheet].width / grid.cols;
+  const cellHeight = atlasDimensions[sheet].height / grid.rows;
+  return {
+    sheet,
+    row,
+    column,
+    x: column * cellWidth,
+    y: row * cellHeight,
+    width: cellWidth,
+    height: cellHeight
   };
 }
 
@@ -272,11 +404,33 @@ async function loadAssets() {
       spriteLookup[id] = { id, name: id, ...spriteCell(sheet, row, column) };
     }
   }
+  spriteLookup.flameSword = {
+    id: "flameSword",
+    name: "Emberbrand",
+    ...gridAtlasCell("weapons", 3, 0),
+    iconScale: 0.5
+  };
+  for (const skill of Object.values(skillInfo)) {
+    spriteLookup[skill.icon] = {
+      id: skill.icon,
+      name: skill.name,
+      ...skillAtlasCell(skill.sheet, skill.row, skill.column)
+    };
+  }
   applyCharacterSheetSprites();
 
   applySpriteStyles();
   await Promise.all([...Object.values(images), ...Object.values(worldAssets), ...Object.values(biomeAssets), ...Object.values(terrainAssets)].map(img => img.decode().catch(() => undefined)));
   assetsReady = true;
+  prewarmSpriteCaches();
+}
+
+function prewarmSpriteCaches() {
+  for (const [id, sprite] of Object.entries(spriteLookup)) {
+    if (!sprite.keyColor) continue;
+    const image = images[sprite.sheet];
+    if (assetLoaded(image)) keyedSpriteCanvas(id, sprite, image);
+  }
 }
 
 function applyCharacterSheetSprites() {
@@ -306,12 +460,13 @@ function applySpriteStyles() {
     const id = el.dataset.sprite;
     const sprite = spriteLookup[id] || spriteLookup.redPotion;
     if (!sprite) return;
-    const scale = sprite.iconScale || ATLAS_DISPLAY / ATLAS_SIZE;
+    const scaleX = sprite.iconScaleX || sprite.iconScale || ATLAS_DISPLAY / ATLAS_SIZE;
+    const scaleY = sprite.iconScaleY || sprite.iconScale || ATLAS_DISPLAY / ATLAS_SIZE;
     const atlas = atlasDimensions[sprite.sheet] || atlasDimensions.items;
     el.style.setProperty("--sheet", `url("${atlasFiles[sprite.sheet]}")`);
-    el.style.setProperty("--x", `${-sprite.x * scale}px`);
-    el.style.setProperty("--y", `${-sprite.y * scale}px`);
-    el.style.backgroundSize = `${atlas.width * scale}px ${atlas.height * scale}px`;
+    el.style.setProperty("--x", `${-sprite.x * scaleX}px`);
+    el.style.setProperty("--y", `${-sprite.y * scaleY}px`);
+    el.style.backgroundSize = `${atlas.width * scaleX}px ${atlas.height * scaleY}px`;
   });
 }
 
@@ -323,6 +478,8 @@ function setActiveHero(id) {
   if (!state.heroes.some(hero => hero.id === id)) return;
   state.activeHeroId = id;
   state.selectedItem = null;
+  state.selectedSkill = null;
+  if (state.camera.mode !== "free") enableFollowCamera();
   document.querySelectorAll(".party-member").forEach(member => {
     member.classList.toggle("active", member.dataset.hero === id);
   });
@@ -434,7 +591,6 @@ function getChunk(cx, cy) {
   if (!state.chunks.has(key)) {
     state.chunks.set(key, generateChunk(cx, cy));
     state.chunkOrder.push(key);
-    trimChunks();
   }
   return state.chunks.get(key);
 }
@@ -515,6 +671,38 @@ function seedChunkEntities(chunk) {
       }
     }
   }
+  if (distFromSpawn > 14) {
+    const cyclopsRoll = hash2(cx, cy, WORLD_SEED + 149);
+    if (cyclopsRoll > CYCLOPS_SPAWN_MIN_ROLL) {
+      const spread = hash2(cx, cy, WORLD_SEED + 150) * Math.PI * 2;
+      const radius = 1.2 + hash2(cx, cy, WORLD_SEED + 151) * 2.2;
+      chunk.enemies.push(enemy(
+        "cyclops",
+        enemyName("cyclops"),
+        centerX + Math.cos(spread) * radius,
+        centerY + Math.sin(spread) * radius,
+        156,
+        23,
+        cyclopsRoll > 0.985 ? "runeShard" : "coinStack"
+      ));
+    }
+  }
+  if (distFromSpawn > 22) {
+    const emperorRoll = hash2(cx, cy, WORLD_SEED + 173);
+    if (emperorRoll > GOBLIN_EMPEROR_SPAWN_MIN_ROLL) {
+      const spread = hash2(cx, cy, WORLD_SEED + 174) * Math.PI * 2;
+      const radius = 1 + hash2(cx, cy, WORLD_SEED + 175) * 2;
+      chunk.enemies.push(enemy(
+        "goblinEmperor",
+        enemyName("goblinEmperor"),
+        centerX + Math.cos(spread) * radius,
+        centerY + Math.sin(spread) * radius,
+        196,
+        28,
+        emperorRoll > 0.99 ? "runeShard" : "coinStack"
+      ));
+    }
+  }
   if (distFromSpawn > 8 && roll > 0.82) {
     const enemyType = biome === "marsh" ? ["swampHag", "beastWolf"] : biome === "ruins" ? ["skeleton", "cultist"] : ["goblinRaider", "beastWolf", "emberImp"];
     const count = roll > 0.82 ? 3 : 2;
@@ -533,9 +721,22 @@ function trimChunks() {
   const hero = activeHero();
   const hcx = Math.floor(hero.x / CHUNK_SIZE);
   const hcy = Math.floor(hero.y / CHUNK_SIZE);
+  const cameraBounds = state.camera.zoom >= DETAIL_TEXTURE_MIN_ZOOM ? visibleTileBounds(8) : null;
+  const cameraChunks = cameraBounds && {
+    minX: Math.floor(cameraBounds.minX / CHUNK_SIZE) - 1,
+    maxX: Math.floor(cameraBounds.maxX / CHUNK_SIZE) + 1,
+    minY: Math.floor(cameraBounds.minY / CHUNK_SIZE) - 1,
+    maxY: Math.floor(cameraBounds.maxY / CHUNK_SIZE) + 1
+  };
   for (const key of [...state.chunks.keys()]) {
     const [cx, cy] = key.split(",").map(Number);
-    if (Math.abs(cx - hcx) > CHUNK_RADIUS + 2 || Math.abs(cy - hcy) > CHUNK_RADIUS + 2) {
+    const nearHero = Math.abs(cx - hcx) <= CHUNK_RADIUS + 2 && Math.abs(cy - hcy) <= CHUNK_RADIUS + 2;
+    const nearCamera = cameraChunks
+      && cx >= cameraChunks.minX
+      && cx <= cameraChunks.maxX
+      && cy >= cameraChunks.minY
+      && cy <= cameraChunks.maxY;
+    if (!nearHero && !nearCamera) {
       state.chunks.delete(key);
     }
   }
@@ -585,7 +786,9 @@ function enemyName(type) {
     swampHag: "Swamp Hag",
     emberImp: "Ember Imp",
     skeleton: "Skeleton",
-    cultist: "Cultist"
+    cultist: "Cultist",
+    cyclops: "Cyclops",
+    goblinEmperor: "Goblin Emperor"
   }[type] || "Enemy";
 }
 
@@ -606,6 +809,8 @@ function buildWorld() {
 }
 
 function enemy(sprite, name, x, y, hp, damage, drop) {
+  const caster = enemySpellProfile(sprite);
+  const melee = enemyMeleeProfile(sprite);
   return {
     id: `${sprite}-${x}-${y}`,
     sprite,
@@ -616,15 +821,32 @@ function enemy(sprite, name, x, y, hp, damage, drop) {
     maxHp: hp,
     damage,
     drop,
-    speed: sprite === "frostAcolyte" ? 1.15 : 1.45,
-    aggro: sprite === "frostAcolyte" ? 6 : 5,
-    attackRange: sprite === "frostAcolyte" ? 3.8 : 1.25,
+    speed: caster?.speed || melee?.speed || (sprite === "frostAcolyte" ? 1.15 : 1.45),
+    aggro: caster?.aggro || melee?.aggro || (sprite === "frostAcolyte" ? 6 : 5),
+    attackRange: caster?.range || melee?.attackRange || (sprite === "frostAcolyte" ? 3.8 : 1.25),
+    attackCooldown: melee?.attackCooldown || null,
+    spellKind: caster?.kind || null,
     cooldown: 0,
     dir: 1,
     walkT: 0,
     attackT: 0,
     dead: false
   };
+}
+
+function enemySpellProfile(sprite) {
+  return {
+    cultist: { kind: "bloodHex", aggro: 7, range: 5.8 },
+    commonNecromancer: { kind: "stormChain", aggro: 8, range: 7 },
+    frostAcolyte: { kind: "frostShard", aggro: 6, range: 3.8 }
+  }[sprite] || null;
+}
+
+function enemyMeleeProfile(sprite) {
+  return {
+    cyclops: { speed: 0.82, aggro: 6.4, attackRange: 1.55, attackCooldown: 1.55 },
+    goblinEmperor: { speed: 0.74, aggro: 7.2, attackRange: 1.7, attackCooldown: 1.75 }
+  }[sprite] || null;
 }
 
 function animal(id, name, biomeAsset, x, y, hp = 18) {
@@ -647,7 +869,11 @@ function animal(id, name, biomeAsset, x, y, hp = 18) {
 
 function restoreSave() {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return;
+  if (!saved) {
+    normalizeHeroSkills();
+    normalizeCamera();
+    return;
+  }
   try {
     const parsed = JSON.parse(saved);
     if (Array.isArray(parsed.heroes)) state.heroes = parsed.heroes;
@@ -660,6 +886,43 @@ function restoreSave() {
     if (typeof parsed.inside === "string" || parsed.inside === null) state.inside = parsed.inside;
   } catch (error) {
     console.warn("Save restore failed.", error);
+  }
+  normalizeHeroSkills();
+  normalizeCamera();
+}
+
+function normalizeCamera() {
+  const hero = activeHero();
+  const camera = state.camera || {};
+  const x = Number.isFinite(camera.x) ? camera.x : hero.x;
+  const y = Number.isFinite(camera.y) ? camera.y : hero.y;
+  const targetX = Number.isFinite(camera.targetX) ? camera.targetX : x;
+  const targetY = Number.isFinite(camera.targetY) ? camera.targetY : y;
+  const zoom = clamp(Number.isFinite(camera.zoom) ? camera.zoom : 1, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM);
+  const targetZoom = clamp(Number.isFinite(camera.targetZoom) ? camera.targetZoom : zoom, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM);
+  state.camera = {
+    x,
+    y,
+    targetX,
+    targetY,
+    zoom,
+    targetZoom,
+    mode: camera.mode === "free" ? "free" : "follow"
+  };
+  if (state.camera.mode !== "free") enableFollowCamera();
+}
+
+function normalizeHeroSkills() {
+  for (const hero of state.heroes) {
+    hero.skills ||= {};
+    hero.skills.known = Array.isArray(hero.skills.known) && hero.skills.known.length ? hero.skills.known : [...DEFAULT_KNOWN_SKILLS];
+    hero.skills.bar = Array.isArray(hero.skills.bar) && hero.skills.bar.length ? hero.skills.bar : [...DEFAULT_SKILL_BAR];
+    while (hero.skills.bar.length < 6) hero.skills.bar.push(null);
+    hero.skills.bar = hero.skills.bar.slice(0, 6);
+  }
+  const hero = activeHero();
+  if (!skillInfo[state.mode] || !hero.skills.bar.includes(state.mode)) {
+    state.mode = hero.skills.bar.find(id => skillInfo[id]) || "cleave";
   }
 }
 
@@ -720,17 +983,18 @@ function updateHudLayout() {
 }
 
 function worldToScreen(x, y) {
-  const centerX = canvas.clientWidth * 0.48;
-  const centerY = canvas.clientHeight * 0.38;
+  const centerX = canvas.clientWidth * CAMERA_ANCHOR_X;
+  const centerY = canvas.clientHeight * CAMERA_ANCHOR_Y;
+  const shake = state.renderShake || { x: 0, y: 0 };
   return {
-    x: centerX + ((x - state.camera.x) - (y - state.camera.y)) * (TILE_W / 2) * state.camera.zoom,
-    y: centerY + ((x - state.camera.x) + (y - state.camera.y)) * (TILE_H / 2) * state.camera.zoom
+    x: centerX + ((x - state.camera.x) - (y - state.camera.y)) * (TILE_W / 2) * state.camera.zoom + shake.x,
+    y: centerY + ((x - state.camera.x) + (y - state.camera.y)) * (TILE_H / 2) * state.camera.zoom + shake.y
   };
 }
 
 function screenToWorld(sx, sy) {
-  const centerX = canvas.clientWidth * 0.48;
-  const centerY = canvas.clientHeight * 0.38;
+  const centerX = canvas.clientWidth * CAMERA_ANCHOR_X;
+  const centerY = canvas.clientHeight * CAMERA_ANCHOR_Y;
   const xIso = (sx - centerX) / state.camera.zoom;
   const yIso = (sy - centerY) / state.camera.zoom;
   return {
@@ -739,12 +1003,136 @@ function screenToWorld(sx, sy) {
   };
 }
 
+function powerOfTwoCeil(value) {
+  let step = 1;
+  while (step < value) step *= 2;
+  return step;
+}
+
+function terrainStepForBounds(bounds) {
+  if (state.camera.zoom >= TERRAIN_LOD_MIN_ZOOM) return 1;
+  const width = Math.max(1, bounds.maxX - bounds.minX + 1);
+  const height = Math.max(1, bounds.maxY - bounds.minY + 1);
+  const idealStep = Math.sqrt(width * height / MAX_TERRAIN_DRAWS);
+  return Math.max(1, powerOfTwoCeil(idealStep));
+}
+
+function decorStepForBounds(bounds, maxDraws, minZoomForFullDetail) {
+  if (state.camera.zoom >= minZoomForFullDetail) return 1;
+  const width = Math.max(1, bounds.maxX - bounds.minX + 1);
+  const height = Math.max(1, bounds.maxY - bounds.minY + 1);
+  const idealStep = Math.sqrt(width * height / maxDraws);
+  return Math.max(1, powerOfTwoCeil(idealStep));
+}
+
+function smoothstep(edge0, edge1, value) {
+  if (edge0 === edge1) return value >= edge1 ? 1 : 0;
+  const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function zoomFade(minZoom, fullZoom) {
+  return smoothstep(minZoom, fullZoom, state.camera.zoom);
+}
+
+function visualDetailLevel() {
+  const z = state.camera.zoom;
+  if (z < 0.12) return "extreme";
+  if (z < 0.22) return "far";
+  if (z < DETAIL_TEXTURE_MIN_ZOOM) return "mid";
+  return "close";
+}
+
+function setCameraTargetZoom(nextZoom, sx = canvas.clientWidth * 0.5, sy = canvas.clientHeight * 0.5) {
+  const mode = state.camera.mode;
+  const before = screenToWorld(sx, sy);
+  state.camera.targetZoom = clamp(nextZoom, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM);
+  const oldZoom = state.camera.zoom;
+  state.camera.zoom = state.camera.targetZoom;
+  const after = screenToWorld(sx, sy);
+  state.camera.zoom = oldZoom;
+  const dx = before.x - after.x;
+  const dy = before.y - after.y;
+  state.camera.x += dx;
+  state.camera.y += dy;
+  if (mode === "free") {
+    state.camera.targetX += dx;
+    state.camera.targetY += dy;
+  } else {
+    enableFollowCamera();
+  }
+}
+
+function zoomCameraBy(factor, sx, sy) {
+  setCameraTargetZoom(state.camera.targetZoom * factor, sx, sy);
+}
+
+function updateCamera(dt) {
+  const player = activeHero();
+  if (state.camera.mode !== "free") {
+    state.camera.targetX = player.x;
+    state.camera.targetY = player.y;
+    state.camera.x = player.x;
+    state.camera.y = player.y;
+  } else {
+    const followAlpha = 1 - Math.exp(-CAMERA_FOLLOW_SMOOTHING * dt);
+    state.camera.x += (state.camera.targetX - state.camera.x) * followAlpha;
+    state.camera.y += (state.camera.targetY - state.camera.y) * followAlpha;
+  }
+  const zoomAlpha = 1 - Math.exp(-CAMERA_ZOOM_SMOOTHING * dt);
+  state.camera.zoom += (state.camera.targetZoom - state.camera.zoom) * zoomAlpha;
+  state.camera.zoom = clamp(state.camera.zoom, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM);
+}
+
+function enableFollowCamera(snap = false) {
+  const hero = activeHero();
+  state.camera.mode = "follow";
+  state.camera.targetX = hero.x;
+  state.camera.targetY = hero.y;
+  if (snap) {
+    state.camera.x = hero.x;
+    state.camera.y = hero.y;
+  }
+}
+
 function tileBlocked(x, y) {
   const tx = Math.floor(x);
   const ty = Math.floor(y);
   const tile = getTile(tx, ty);
-  if (!tile || tile.water) return true;
+  if (!tile) return true;
+  return buildingBlocksPosition(tx, ty) || propBlocksPosition(x, y);
+}
+
+function buildingBlocksPosition(tx, ty) {
   return state.buildings.some(b => tx >= b.x && ty >= b.y && tx < b.x + b.w && ty < b.y + b.h - 1);
+}
+
+function propBlocksPosition(x, y) {
+  const tx = Math.floor(x);
+  const ty = Math.floor(y);
+  for (let py = ty - 1; py <= ty + 1; py++) {
+    for (let px = tx - 1; px <= tx + 1; px++) {
+      const tile = getTile(px, py);
+      if (!tile?.prop || tile.water) continue;
+      const radius = propCollisionRadius(tile.prop);
+      if (radius <= 0) continue;
+      if (Math.hypot(x - px, y - py) < radius) return true;
+    }
+  }
+  return false;
+}
+
+function propCollisionRadius(propId) {
+  if (PROP_COLLISION_RADII[propId]) return PROP_COLLISION_RADII[propId];
+  if (NON_SOLID_PROP_PARTS.some(part => propId.includes(part))) return 0;
+  if (propId.includes("tree")) return 0.48;
+  if (propId.includes("bush")) return 0.32;
+  return OBJECT_COLLISION_RADIUS;
+}
+
+function moveEntityWithCollision(entity, nx, ny) {
+  if (!tileBlocked(nx, entity.y)) entity.x = nx;
+  if (!tileBlocked(entity.x, ny)) entity.y = ny;
 }
 
 function update(dt) {
@@ -765,8 +1153,7 @@ function update(dt) {
     if (state.keys.has("shift")) player.stamina = Math.max(0, player.stamina - 18 * dt);
     const nx = player.x + dx * speed;
     const ny = player.y + dy * speed;
-    if (!tileBlocked(nx, player.y)) player.x = nx;
-    if (!tileBlocked(player.x, ny)) player.y = ny;
+    moveEntityWithCollision(player, nx, ny);
     player.dir = dx >= 0 ? 1 : -1;
     player.walkT += dt * 9;
   } else {
@@ -775,19 +1162,25 @@ function update(dt) {
 
   player.attackT = Math.max(0, player.attackT - dt);
   updateHeroHitEffects(dt);
-  state.camera.x += (player.x - state.camera.x) * 0.08;
-  state.camera.y += (player.y - state.camera.y) * 0.08;
+  updateCamera(dt);
   updatePartyFollowers(dt);
   updateAnimals(dt);
 
   updateEnemies(dt);
   updateProjectiles(dt);
+  updateSpellEffects(dt);
   updateParticles(dt);
   updateBlood(dt);
+  updateScreenEffects(dt);
   pickupNearbyLoot();
   updateQuestState();
+  trimChunks();
   saveGame();
-  renderHud();
+  const now = performance.now();
+  if (now - lastHudRender > HUD_FRAME_MS) {
+    renderHud();
+    lastHudRender = now;
+  }
 }
 
 function updatePartyFollowers(dt) {
@@ -811,8 +1204,7 @@ function updatePartyFollowers(dt) {
       const speed = 2.55 * dt;
       const nx = hero.x + (tx - hero.x) / dist * speed;
       const ny = hero.y + (ty - hero.y) / dist * speed;
-      if (!tileBlocked(nx, hero.y)) hero.x = nx;
-      if (!tileBlocked(hero.x, ny)) hero.y = ny;
+      moveEntityWithCollision(hero, nx, ny);
       hero.dir = tx >= hero.x ? 1 : -1;
       hero.walkT += dt * 8;
     }
@@ -829,8 +1221,7 @@ function updateAnimals(dt) {
       const dy = (animal.y - hero.y) / Math.max(0.1, dist);
       const nx = animal.x + dx * dt * 1.4;
       const ny = animal.y + dy * dt * 1.4;
-      if (!tileBlocked(nx, animal.y)) animal.x = nx;
-      if (!tileBlocked(animal.x, ny)) animal.y = ny;
+      moveEntityWithCollision(animal, nx, ny);
       animal.walkT += dt * 5;
       animal.dir = dx >= 0 ? 1 : -1;
     }
@@ -852,12 +1243,17 @@ function updateEnemies(dt) {
       const dy = (targetHero.y - e.y) / dist;
       const nx = e.x + dx * e.speed * dt;
       const ny = e.y + dy * e.speed * dt;
-      if (!tileBlocked(nx, e.y)) e.x = nx;
-      if (!tileBlocked(e.x, ny)) e.y = ny;
+      moveEntityWithCollision(e, nx, ny);
       e.walkT += dt * 8;
     }
-    if (dist <= e.attackRange && e.cooldown <= 0) {
-      e.cooldown = e.sprite === "frostAcolyte" ? 1.35 : 1.05;
+    if (e.spellKind && e.spellKind !== "frostShard" && dist <= e.attackRange && e.cooldown <= 0) {
+      const spec = skillInfo[e.spellKind];
+      e.cooldown = e.spellKind === "stormChain" ? 2.8 : 2.1;
+      e.attackT = 0.55;
+      const targets = e.spellKind === "stormChain" ? nearestHeroes(e, spec.maxTargets || 3, spec.range) : [targetHero];
+      startSpellEffect(e, targets, spec, { hostile: true });
+    } else if (dist <= e.attackRange && e.cooldown <= 0) {
+      e.cooldown = e.attackCooldown || (e.sprite === "frostAcolyte" ? 1.35 : 1.05);
       e.attackT = 0.35;
       damageHero(targetHero, e.damage, e);
       addFloating(`-${e.damage}`, targetHero.x, targetHero.y, "#ff9b7b");
@@ -866,9 +1262,24 @@ function updateEnemies(dt) {
   }
 }
 
+function nearestHeroes(point, count = 3, range = 8) {
+  return state.heroes
+    .filter(hero => hero.hp > 0 && distance(point, hero) <= range)
+    .map(hero => ({ hero, d: distance(point, hero) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, count)
+    .map(item => item.hero);
+}
+
 function updateHeroHitEffects(dt) {
   for (const hero of state.heroes) {
     hero.lowHealthHitT = Math.max(0, (hero.lowHealthHitT || 0) - dt);
+    hero.flashT = Math.max(0, (hero.flashT || 0) - dt);
+    hero.shakeT = Math.max(0, (hero.shakeT || 0) - dt);
+  }
+  for (const enemy of state.enemies) {
+    enemy.flashT = Math.max(0, (enemy.flashT || 0) - dt);
+    enemy.shakeT = Math.max(0, (enemy.shakeT || 0) - dt);
   }
 }
 
@@ -884,11 +1295,80 @@ function updateProjectiles(dt) {
     p.t += dt * p.speed;
     if (p.t >= 1) {
       hitEnemy(p.target, p.damage, p.kind);
-      burst(p.target.x, p.target.y, p.kind === "frost" ? "#88dfff" : p.kind === "fire" ? "#ff742d" : "#e8c276", 18);
+      burst(p.target.x, p.target.y, p.color || "#e8c276", 18);
       return false;
     }
     return p.target && !p.target.dead;
   });
+}
+
+function startSpellEffect(caster, targets, spec, options = {}) {
+  const liveTargets = targets.filter(target => target && !target.dead && target.hp > 0);
+  if (!liveTargets.length) return;
+  castRing(caster.x, caster.y, spec.color);
+  for (const target of liveTargets) applyMagicImpact(target, spec.secondaryColor || spec.color, 0.3, 0.35);
+  state.spellEffects.push({
+    caster,
+    targets: liveTargets,
+    hostile: Boolean(options.hostile),
+    kind: spec.type === "chain" ? "lightning" : spec.icon?.includes("Blood") || spec.name.includes("Hex") ? "bloodHex" : spec.name.toLowerCase().includes("frost") ? "frost" : "lightning",
+    life: spec.duration || 0.55,
+    maxLife: spec.duration || 0.55,
+    tick: 0,
+    tickRate: spec.tickRate || 0.2,
+    damage: spec.damage,
+    color: spec.color,
+    secondaryColor: spec.secondaryColor || spec.color,
+    seed: Math.random() * 10000
+  });
+  burst(caster.x, caster.y, spec.secondaryColor || spec.color, 14);
+}
+
+function updateSpellEffects(dt) {
+  state.spellEffects = state.spellEffects.filter(effect => {
+    effect.life -= dt;
+    effect.tick -= dt;
+    effect.targets = effect.targets.filter(target => target && !target.dead && target.hp > 0);
+    if (!effect.targets.length) return false;
+    if (effect.tick <= 0) {
+      effect.tick = effect.tickRate;
+      for (const target of effect.targets) {
+        if (effect.hostile) {
+          damageHero(target, effect.damage, { spellKind: effect.kind });
+          addFloating(`-${effect.damage}`, target.x, target.y, effect.secondaryColor);
+        } else {
+          hitEnemy(target, effect.damage, effect.kind);
+        }
+        magicBurst(target.x, target.y, effect.secondaryColor, 10);
+      }
+    }
+    for (const target of effect.targets) {
+      if (Math.random() < 0.45) {
+        state.particles.push({
+          x: target.x + (Math.random() - 0.5) * 0.45,
+          y: target.y + (Math.random() - 0.5) * 0.45,
+          vx: (Math.random() - 0.5) * 1.3,
+          vy: (Math.random() - 0.5) * 1.3,
+          color: effect.secondaryColor,
+          size: 2 + Math.random() * 5,
+          life: 0.22 + Math.random() * 0.22,
+          maxLife: 0.44,
+          shape: "spark"
+        });
+      }
+    }
+    return effect.life > 0;
+  });
+}
+
+function updateScreenEffects(dt) {
+  state.screenFlash = Math.max(0, state.screenFlash - dt);
+  state.screenShake = Math.max(0, state.screenShake - dt);
+  const shake = state.screenShake > 0 ? state.screenShake / 0.5 : 0;
+  state.renderShake = {
+    x: (Math.random() - 0.5) * 10 * shake,
+    y: (Math.random() - 0.5) * 8 * shake
+  };
 }
 
 function updateParticles(dt) {
@@ -918,6 +1398,7 @@ function updateBlood(dt) {
 function damageHero(hero, amount, source = null) {
   addBlood(hero.x, hero.y, amount, source ? "hero-hit" : "hero");
   hero.hp = Math.max(0, hero.hp - amount);
+  applyMagicImpact(hero, source?.spellKind ? "#f8fbff" : "#ff9b7b", 0.28, 0.45);
   if (hero.hp > 0 && hero.hp / hero.maxHp <= LOW_HEALTH_FLASH_THRESHOLD) {
     hero.lowHealthHitT = LOW_HEALTH_FLASH_DURATION;
   }
@@ -931,33 +1412,47 @@ function damageHero(hero, amount, source = null) {
   }
 }
 
+function applyMagicImpact(actor, color = "#ffffff", flash = 0.24, shake = 0.28) {
+  if (!actor) return;
+  actor.flashT = Math.max(actor.flashT || 0, flash);
+  actor.flashColor = color;
+  actor.shakeT = Math.max(actor.shakeT || 0, shake);
+}
+
+function triggerScreenHit(flash = 0.18, shake = 0.28) {
+  state.screenFlash = Math.max(state.screenFlash, flash);
+  state.screenShake = Math.max(state.screenShake, shake);
+}
+
 function attack(target = nearestEnemy()) {
-  if (!target || target.dead) return;
   const player = activeHero();
-  const dist = distance(player, target);
-  const modes = {
-    melee: { range: 1.65, cost: ["stamina", 8], damage: 18, color: "#ffc36a", speed: 4.8 },
-    ranged: { range: 6.5, cost: ["stamina", 12], damage: 15, color: "#ffdb8a", speed: 3.7 },
-    fire: { range: 7.5, cost: ["mana", 18], damage: 26, color: "#ff642a", speed: 2.8 },
-    frost: { range: 7.0, cost: ["mana", 15], damage: 18, color: "#7fdcff", speed: 3.0 }
-  };
-  const spec = modes[state.mode];
-  if (dist > spec.range) {
+  const spec = skillInfo[state.mode] || skillInfo[player.skills?.bar?.find(id => skillInfo[id])] || skillInfo.cleave;
+  if (spec.type !== "self" && (!target || target.dead)) return;
+  const dist = target ? distance(player, target) : 0;
+  if (target && dist > spec.range) {
     toast("Move closer.");
     return;
   }
-  const [resource, cost] = spec.cost;
-  const key = resource === "mana" ? "mana" : "stamina";
-  if (player[key] < cost) {
-    toast(`Not enough ${resource}.`);
+  const key = spec.resource === "mana" ? "mana" : "stamina";
+  if (player[key] < spec.cost) {
+    toast(`Not enough ${spec.resource}.`);
     return;
   }
-  player[key] -= cost;
+  player[key] -= spec.cost;
   player.attackT = 0.32;
-  castRing(target.x, target.y, spec.color);
-  if (state.mode === "melee") {
+  if (spec.type === "self") {
+    player.mana = Math.min(player.maxMana + 20, player.mana + 20);
+    applyMagicImpact(player, spec.color, 0.45, 0.5);
+    castRing(player.x, player.y, spec.color);
+    burst(player.x, player.y, spec.color, 22);
+    toast(`${spec.name} active.`);
+  } else if (spec.type === "melee") {
     hitEnemy(target, spec.damage, "melee");
     burst(target.x, target.y, spec.color, 12);
+    castRing(target.x, target.y, spec.color);
+  } else if (spec.type === "beam" || spec.type === "chain") {
+    const targets = spec.type === "chain" ? nearestEnemies(spec.range, spec.maxTargets || 3, target) : [target];
+    startSpellEffect(player, targets, spec, { hostile: false });
   } else {
     state.projectiles.push({
       x: player.x,
@@ -969,7 +1464,20 @@ function attack(target = nearestEnemy()) {
       kind: state.mode,
       color: spec.color
     });
+    castRing(target.x, target.y, spec.color);
   }
+}
+
+function nearestEnemies(range = 8, count = 1, preferred = null) {
+  const hero = activeHero();
+  const targets = [
+    ...state.enemies,
+    ...(state.animals || [])
+  ]
+    .filter(e => !e.dead && distance(e, hero) <= range)
+    .map(e => ({ e, d: distance(e, hero) }))
+    .sort((a, b) => (a.e === preferred ? -1 : b.e === preferred ? 1 : a.d - b.d));
+  return targets.slice(0, count).map(item => item.e);
 }
 
 function hitEnemy(target, damage, kind) {
@@ -978,6 +1486,7 @@ function hitEnemy(target, damage, kind) {
   const finalDamage = crit ? Math.round(damage * 1.8) : damage;
   target.hp = Math.max(0, target.hp - finalDamage);
   target.attackT = 0.22;
+  applyMagicImpact(target, damageColorForKind(kind), 0.24, 0.36);
   addBlood(target.x, target.y, finalDamage, kind);
   addFloating(`${crit ? "Crit " : ""}-${finalDamage}`, target.x, target.y, kind === "frost" ? "#b9efff" : "#ffcf75");
   if (target.hp <= 0) {
@@ -988,6 +1497,14 @@ function hitEnemy(target, damage, kind) {
     if (target.kind !== "animal") activeHero().xp += 12;
     toast(`${target.name} defeated.`);
   }
+}
+
+function damageColorForKind(kind) {
+  if (kind === "lightning" || kind === "stormChain" || kind === "lightningArc") return "#ffffff";
+  if (kind === "frost" || kind === "frostShard") return "#b9efff";
+  if (kind === "bloodHex") return "#ff2f76";
+  if (kind === "firebolt") return "#ff742d";
+  return "#ffcf75";
 }
 
 function addBlood(x, y, damage, kind = "hit", fadeFast = false) {
@@ -1162,20 +1679,23 @@ function hasItem(id) {
 function updateQuestState() {
   state.quest.temple = state.quest.temple || state.inside === "temple";
   state.quest.priest = state.quest.priest || Object.entries(state.worldEdits).some(([key, edit]) => key.includes("cultist") && edit.dead);
-  document.getElementById("questTemple").checked = state.quest.temple;
-  document.getElementById("questPriest").checked = state.quest.priest;
+  const temple = document.getElementById("questTemple");
+  const priest = document.getElementById("questPriest");
+  if (temple.checked !== state.quest.temple) temple.checked = state.quest.temple;
+  if (priest.checked !== state.quest.priest) priest.checked = state.quest.priest;
 }
 
 function render() {
   ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
   drawBackdrop();
-  drawMap();
-  drawBuildings();
-  drawEntities();
+  const worldItems = drawMap();
+  drawDepthSortedWorld(worldItems);
+  drawSpellEffects();
   drawProjectiles();
   drawParticles();
+  drawScreenEffects();
   drawInteriorOverlay();
-  drawMiniMap();
+  drawMiniMapThrottled();
 }
 
 function drawBackdrop() {
@@ -1196,30 +1716,21 @@ function drawBackdrop() {
 function drawMap() {
   const view = createMapRenderView();
   const visibleTiles = getVisibleTerrainTiles(view);
-  const props = [];
+  const detail = visualDetailLevel();
+  const visibleForestTiles = getVisibleForestTiles(view);
+  const props = getVisibleProps(view, detail);
   drawBaseTerrain(visibleTiles);
-  drawFloraTerrain(visibleTiles);
-  drawForestTerrain(visibleTiles);
-  drawWaterTerrain(visibleTiles);
-  drawBloodGround(view.bloodBounds);
-  for (const entry of visibleTiles) {
-    const { tile, x, y, screen } = entry;
-    if (tile.prop && !tile.water) {
-      const tall = tile.prop.includes("tree") || tile.prop.includes("bramble");
-      const width = tall ? 92 : 62;
-      const height = tall ? 110 : 68;
-      if (isScreenRectVisible(screen.x - width * state.camera.zoom / 2, screen.y - height * state.camera.zoom, width * state.camera.zoom, height * state.camera.zoom + TILE_H * state.camera.zoom)) {
-        props.push({ id: tile.prop, x, y, screen, tall });
-      }
-    }
+  if (detail === "close") {
+    drawFloraTerrain(visibleTiles);
+    drawSurfaceGrassDecals(visibleTiles, view);
+    drawWaterTerrain(visibleTiles);
   }
+  if (detail !== "extreme") drawBloodGround(view.bloodBounds);
   props.sort((a, b) => (a.x + a.y) - (b.x + b.y));
   for (const prop of props) {
-    if (!drawBiomeSprite(prop.id, prop.screen.x, prop.screen.y, prop.tall ? 92 : 62, prop.tall ? 110 : 68)) {
-      ctx.fillStyle = "rgba(97, 153, 69, 0.34)";
-      ctx.fillRect(prop.screen.x - 3, prop.screen.y + TILE_H * state.camera.zoom / 2 - 2, 6, 4);
-    }
+    prop.depth = prop.x + prop.y + 0.7;
   }
+  return { props, forests: visibleForestTiles };
 }
 
 function createMapRenderView() {
@@ -1229,9 +1740,13 @@ function createMapRenderView() {
     screenToWorld(0, canvas.clientHeight),
     screenToWorld(canvas.clientWidth, canvas.clientHeight)
   ];
+  const tileBounds = visibleTileBounds(4, corners);
+  const forestBounds = visibleTileBounds(state.camera.zoom < 0.42 ? 8 : FOREST_RENDER_TILE_PAD, corners);
   return {
-    tileBounds: visibleTileBounds(4, corners),
-    bloodBounds: visibleTileBounds(2, corners)
+    tileBounds,
+    forestBounds,
+    bloodBounds: visibleTileBounds(2, corners),
+    terrainStep: terrainStepForBounds(tileBounds)
   };
 }
 
@@ -1264,23 +1779,74 @@ function drawBloodGround(bounds) {
 function getVisibleTerrainTiles(view) {
   const bounds = view.tileBounds;
   const tiles = [];
-  const tw = TILE_W * state.camera.zoom;
-  const th = TILE_H * state.camera.zoom;
-  for (let y = bounds.minY; y <= bounds.maxY; y++) {
-    for (let x = bounds.minX; x <= bounds.maxX; x++) {
+  const step = view.terrainStep || 1;
+  const tw = TILE_W * state.camera.zoom * step;
+  const th = TILE_H * state.camera.zoom * step;
+  const startX = Math.floor(bounds.minX / step) * step;
+  const startY = Math.floor(bounds.minY / step) * step;
+  for (let y = startY; y <= bounds.maxY; y += step) {
+    for (let x = startX; x <= bounds.maxX; x += step) {
       const screen = worldToScreen(x, y);
       if (!isScreenRectVisible(screen.x - tw / 2, screen.y, tw, th)) continue;
-      const tile = getTile(x, y);
-      const riverMask = tile.water || (!tile.road && !tile.water) ? riverNeighborMask(x, y) : 0;
-      tiles.push({ x, y, tile, screen, tw, th, riverMask });
+      const tile = step > 1 ? tileFromSeed(x, y) : getTile(x, y);
+      const riverMask = step === 1 && (tile.water || (!tile.road && !tile.water)) ? riverNeighborMask(x, y) : 0;
+      tiles.push({ x, y, tile, screen, tw, th, riverMask, step });
     }
   }
   return tiles;
 }
 
+function getVisibleForestTiles(view) {
+  const alpha = zoomFade(FOREST_MIN_ZOOM, FOREST_FULL_ZOOM);
+  if (alpha <= 0) return [];
+  const bounds = view.forestBounds;
+  const tiles = [];
+  const step = decorStepForBounds(bounds, MAX_FOREST_DRAWS, FOREST_FULL_ZOOM);
+  const tw = TILE_W * state.camera.zoom;
+  const th = TILE_H * state.camera.zoom;
+  const startX = Math.floor(bounds.minX / step) * step;
+  const startY = Math.floor(bounds.minY / step) * step;
+  for (let y = startY; y <= bounds.maxY; y += step) {
+    for (let x = startX; x <= bounds.maxX; x += step) {
+      const tile = tileFromSeed(x, y);
+      if (!tile?.forest || tile.water) continue;
+      const screen = worldToScreen(x, y);
+      if (!isForestClusterVisible(tile.forest, screen, tw, th)) continue;
+      tiles.push({ x, y, tile, screen, tw, th, depth: x + y + 0.68, alpha });
+    }
+  }
+  return tiles;
+}
+
+function getVisibleProps(view, detail) {
+  const alpha = zoomFade(PROP_MIN_ZOOM, PROP_FULL_ZOOM);
+  if (alpha <= 0 || detail === "extreme") return [];
+  const bounds = view.tileBounds;
+  const props = [];
+  const step = decorStepForBounds(bounds, MAX_PROP_DRAWS, PROP_FULL_ZOOM);
+  const startX = Math.floor(bounds.minX / step) * step;
+  const startY = Math.floor(bounds.minY / step) * step;
+  for (let y = startY; y <= bounds.maxY; y += step) {
+    for (let x = startX; x <= bounds.maxX; x += step) {
+      const tile = tileFromSeed(x, y);
+      if (!tile.prop || tile.water) continue;
+      const screen = worldToScreen(x, y);
+      const tall = tile.prop.includes("tree") || tile.prop.includes("bramble");
+      const width = tall ? 92 : 62;
+      const height = tall ? 110 : 68;
+      const scaledWidth = width * WORLD_ITEM_DRAW_SCALE;
+      const scaledHeight = height * WORLD_ITEM_DRAW_SCALE;
+      if (!isScreenRectVisible(screen.x - scaledWidth * state.camera.zoom / 2, screen.y - scaledHeight * state.camera.zoom, scaledWidth * state.camera.zoom, scaledHeight * state.camera.zoom + TILE_H * state.camera.zoom)) continue;
+      props.push({ id: tile.prop, x, y, screen, tall, alpha });
+    }
+  }
+  return props;
+}
+
 function drawBaseTerrain(visibleTiles) {
   const fillPaths = new Map();
   const strokePath = new Path2D();
+  const detailedTerrain = state.camera.zoom >= DETAIL_TEXTURE_MIN_ZOOM && (visibleTiles[0]?.step || 1) === 1;
   for (const entry of visibleTiles) {
     const { tile, screen, tw, th } = entry;
     const fillStyle = tile.water ? "#063436" : tile.road ? "#3a3328" : biomeColor(tile.biome);
@@ -1297,32 +1863,25 @@ function drawBaseTerrain(visibleTiles) {
     ctx.fill(path);
   }
   const dungeonFloorLoaded = assetLoaded(worldAssets.dungeonFloor);
-  if (dungeonFloorLoaded) {
+  if (detailedTerrain && dungeonFloorLoaded) {
     for (const entry of visibleTiles) {
       const { tile, screen, tw, th } = entry;
       if (tile.water) continue;
       drawClippedTerrainImage(worldAssets.dungeonFloor, screen, tw, th, tile.road ? 0.24 : 0.42);
     }
   }
-  ctx.strokeStyle = "rgba(176, 119, 45, 0.16)";
-  ctx.lineWidth = 1;
-  ctx.stroke(strokePath);
+  if (detailedTerrain) {
+    ctx.strokeStyle = "rgba(176, 119, 45, 0.16)";
+    ctx.lineWidth = 1;
+    ctx.stroke(strokePath);
+  }
 }
 
 function drawFloraTerrain(visibleTiles) {
-  const grassSheetsLoaded = assetLoaded(terrainAssets.grassSmall) && assetLoaded(terrainAssets.grassMedium) && assetLoaded(terrainAssets.grassLarge);
   const riverEdgeLoaded = assetLoaded(terrainAssets.riverEdge);
   for (const entry of visibleTiles) {
     const { tile, x, y, screen, tw, th, riverMask } = entry;
     if (tile.water || tile.road) continue;
-    if (grassSheetsLoaded) {
-      const alpha = tile.biome === "ruins" ? 0.34 : tile.biome === "marsh" ? 0.52 : 0.62;
-      drawTerrainSheetCell("grassLarge", pickSheetCell("grassLarge", x, y, 83), screen, tw, th, alpha * 0.72);
-      drawTerrainSheetCell("grassMedium", pickSheetCell("grassMedium", x, y, 89), screen, tw, th, alpha * 0.88);
-      drawTerrainSheetCell("grassSmall", pickSheetCell("grassSmall", x, y, 97), screen, tw, th, alpha);
-    } else {
-      drawProceduralGrassOverlay(tile, x, y, screen, tw, th);
-    }
     if (riverEdgeLoaded && riverMask > 0) {
       drawTerrainSheetCell("riverEdge", riverEdgeCellIndex(riverMask, x, y), screen, tw, th, 0.54);
     }
@@ -1346,6 +1905,45 @@ function drawWaterTerrain(visibleTiles) {
   }
 }
 
+function drawSurfaceGrassDecals(visibleTiles, view) {
+  if ((view.terrainStep || 1) !== 1) return;
+  const alpha = zoomFade(SURFACE_GRASS_MIN_ZOOM, SURFACE_GRASS_FULL_ZOOM);
+  if (alpha <= 0 || !SURFACE_GRASS_DECAL_KEYS.every(key => assetLoaded(terrainAssets[key]))) return;
+
+  ctx.save();
+  for (const entry of visibleTiles) {
+    const { tile, x, y, screen, tw, th, riverMask } = entry;
+    if (tile.water || tile.road || riverMask > 0) continue;
+    const densityRoll = hash2(x, y, WORLD_SEED + 401);
+    if (densityRoll < 0.42) continue;
+    const count = densityRoll > 0.88 ? 3 : densityRoll > 0.66 ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      drawSurfaceGrassDecal(x, y, i, screen, tw, th, alpha);
+    }
+  }
+  ctx.restore();
+}
+
+function drawSurfaceGrassDecal(x, y, index, screen, tw, th, alpha) {
+  const spriteRoll = hash2(x + index * 11, y - index * 13, WORLD_SEED + 409);
+  const key = SURFACE_GRASS_DECAL_KEYS[Math.floor(spriteRoll * SURFACE_GRASS_DECAL_KEYS.length) % SURFACE_GRASS_DECAL_KEYS.length];
+  const image = terrainAssets[key];
+  if (!assetLoaded(image)) return;
+
+  const offsetA = hash2(x + index * 17, y, WORLD_SEED + 419) - 0.5;
+  const offsetB = hash2(x, y - index * 19, WORLD_SEED + 421) - 0.5;
+  const px = screen.x + offsetA * tw * 0.98;
+  const py = screen.y + th * (0.5 + offsetB * 0.92);
+  const scale = (SURFACE_GRASS_WORLD_WIDTH / image.naturalWidth) * state.camera.zoom;
+
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = alpha * (0.38 + hash2(x - index * 7, y + index * 5, WORLD_SEED + 443) * 0.34);
+  ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+  ctx.restore();
+}
+
 function drawForestTerrain(visibleTiles) {
   const forestTiles = [];
   for (const entry of visibleTiles) {
@@ -1363,7 +1961,7 @@ function drawForestTerrain(visibleTiles) {
   }
 }
 
-function drawForestClusterSprite(forest, p, tw, th) {
+function drawForestClusterSprite(forest, p, tw, th, alpha = 1) {
   const image = terrainAssets.forestClusters;
   const sheet = terrainAssetFiles.forestClusters;
   if (!assetLoaded(image) || !sheet) return false;
@@ -1372,23 +1970,22 @@ function drawForestClusterSprite(forest, p, tw, th) {
   const sy = Math.floor(cell / sheet.cols) * image.naturalHeight / sheet.rows;
   const sw = image.naturalWidth / sheet.cols;
   const sh = image.naturalHeight / sheet.rows;
-  const width = tw * 1.46 * forest.scale;
-  const height = th * 2.75 * forest.scale;
+  const rect = getForestClusterScreenRect(forest, p, tw, th);
   ctx.save();
-  ctx.globalAlpha = 0.9;
-  ctx.drawImage(image, sx, sy, sw, sh, p.x - width / 2, p.y + th * 0.68 - height, width, height);
+  ctx.globalAlpha = 0.9 * alpha;
+  ctx.drawImage(image, sx, sy, sw, sh, rect.x, rect.y, rect.width, rect.height);
   ctx.restore();
   return true;
 }
 
-function drawProceduralForestCluster(forest, x, y, p, tw, th) {
+function drawProceduralForestCluster(forest, x, y, p, tw, th, alpha = 1) {
   ctx.save();
-  ctx.globalAlpha = 0.86;
+  ctx.globalAlpha = 0.86 * alpha;
   for (let i = 0; i < forest.density; i++) {
     const seed = hash2(x + i * 3, y - i * 5, WORLD_SEED + 181);
     const px = p.x + (seed - 0.5) * tw * 0.74;
     const py = p.y + th * (0.3 + hash2(x - i * 7, y + i * 2, WORLD_SEED + 191) * 0.42);
-    const h = th * (1.08 + hash2(x + i, y + i, WORLD_SEED + 197) * 0.82) * forest.scale;
+    const h = th * (1.08 + hash2(x + i, y + i, WORLD_SEED + 197) * 0.82) * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_HEIGHT_SCALE;
     const crown = h * (0.22 + seed * 0.08);
     ctx.fillStyle = forest.variant % 2 ? "#111c13" : "#172414";
     ctx.beginPath();
@@ -1409,9 +2006,19 @@ function drawProceduralForestCluster(forest, x, y, p, tw, th) {
 }
 
 function isForestClusterVisible(forest, p, tw, th) {
-  const width = tw * 1.46 * forest.scale;
-  const height = th * 2.75 * forest.scale;
-  return isScreenRectVisible(p.x - width / 2, p.y + th * 0.68 - height, width, height);
+  const rect = getForestClusterScreenRect(forest, p, tw, th);
+  return isScreenRectVisible(rect.x, rect.y, rect.width, rect.height);
+}
+
+function getForestClusterScreenRect(forest, p, tw, th) {
+  const width = tw * 1.46 * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_WIDTH_SCALE;
+  const height = th * 2.75 * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_HEIGHT_SCALE;
+  return {
+    x: p.x - width / 2,
+    y: p.y + th * 0.68 - height,
+    width,
+    height
+  };
 }
 
 function drawTileDiamond(p, tw, th, fillStyle) {
@@ -1590,24 +2197,100 @@ function biomeColor(biome) {
   }[biome] || "#1b2119";
 }
 
+function drawDepthSortedWorld(worldItems) {
+  const actors = [
+    ...state.loot.map(l => ({ kind: "loot", depth: l.x + l.y - 0.05, data: l })),
+    ...state.npcs.map(n => ({ kind: "actor", depth: n.x + n.y, data: { ...n, kind: "npc" } })),
+    ...(state.animals || []).filter(a => !a.dead).map(a => ({ kind: "actor", depth: a.x + a.y, data: { ...a, kind: "animal" } })),
+    ...state.enemies.filter(e => !e.dead).map(e => ({ kind: "actor", depth: e.x + e.y, data: { ...e, kind: "enemy" } })),
+    ...state.heroes.map(hero => ({ kind: "actor", depth: hero.x + hero.y + 0.1, data: { ...hero, kind: "player", sprite: hero.id } }))
+  ];
+  const buildings = state.buildings.map(b => ({
+    kind: "building",
+    depth: b.x + b.w / 2 - 0.5 + b.y + b.h - 1,
+    data: b
+  }));
+  const decals = getWorldDecals().map(decal => ({ kind: "decal", depth: decal.x + decal.y + 0.85, data: decal }));
+  const forests = (worldItems?.forests || []).map(entry => ({ kind: "forest", depth: entry.depth, data: entry }));
+  const props = (worldItems?.props || []).map(prop => ({ kind: "prop", depth: prop.depth, data: prop }));
+  const items = [...decals, ...forests, ...props, ...buildings, ...actors].sort((a, b) => a.depth - b.depth);
+
+  for (const item of items) {
+    if (item.kind === "decal") drawRuinedVillageDecal(item.data);
+    else if (item.kind === "forest") drawForestEntry(item.data);
+    else if (item.kind === "prop") drawProp(item.data);
+    else if (item.kind === "building") drawBuilding(item.data);
+    else if (item.kind === "loot") drawLoot(item.data);
+    else drawActor(item.data);
+  }
+}
+
+function getWorldDecals() {
+  const image = worldAssets.ruinedVillage;
+  if (!assetLoaded(image)) return [];
+  const z = state.camera.zoom;
+  const alpha = zoomFade(DECAL_MIN_ZOOM, DECAL_FULL_ZOOM);
+  if (alpha <= 0) return [];
+  return ruinedVillageDecals.flatMap(decal => {
+    const p = worldToScreen(decal.x, decal.y);
+    const width = decal.width * z;
+    const height = width * (image.naturalHeight / image.naturalWidth);
+    const x = p.x - width / 2;
+    const y = p.y - height + decal.depth * z;
+    if (!isScreenRectVisible(x, y, width, height, 160 * z)) return [];
+    return [{ ...decal, alpha: decal.alpha * alpha, screen: { x, y, width, height } }];
+  });
+}
+
+function drawRuinedVillageDecal(decal) {
+  const image = worldAssets[decal.id];
+  if (!assetLoaded(image)) return;
+  ctx.save();
+  ctx.globalAlpha = decal.alpha;
+  ctx.drawImage(image, decal.screen.x, decal.screen.y, decal.screen.width, decal.screen.height);
+  ctx.restore();
+}
+
+function drawForestEntry(entry) {
+  const { tile, x, y, screen, tw, th, alpha = 1 } = entry;
+  if (!drawForestClusterSprite(tile.forest, screen, tw, th, alpha)) {
+    drawProceduralForestCluster(tile.forest, x, y, screen, tw, th, alpha);
+  }
+}
+
+function drawProp(prop) {
+  ctx.save();
+  ctx.globalAlpha = prop.alpha ?? 1;
+  if (!drawBiomeSprite(prop.id, prop.screen.x, prop.screen.y, prop.tall ? 92 : 62, prop.tall ? 110 : 68, 1, FAR_PROP_MIN_RENDER_ZOOM)) {
+    ctx.fillStyle = "rgba(97, 153, 69, 0.34)";
+    ctx.fillRect(prop.screen.x - 3, prop.screen.y + TILE_H * state.camera.zoom / 2 - 2, 6, 4);
+  }
+  ctx.restore();
+}
+
 function drawBuildings() {
   for (const b of state.buildings) {
+    drawBuilding(b);
+  }
+}
+
+function drawBuilding(b) {
     const base = worldToScreen(b.x + b.w / 2 - 0.5, b.y + b.h - 1);
     const z = state.camera.zoom;
     if (b.biomeAsset && drawBiomeSprite(b.biomeAsset, base.x, base.y + 18 * z, 190, 190)) {
       drawLabel(b.name, base.x, base.y + 52 * z, "#f0c46a");
-      continue;
+      return;
     }
     const generated = worldAssets[b.asset || b.id];
     if (assetLoaded(generated)) {
-      const width = b.id === "forge" ? 210 : 250;
-      const height = b.id === "forge" ? 190 : 230;
+      const width = (b.id === "forge" ? 210 : 250) * WORLD_ITEM_DRAW_SCALE;
+      const height = (b.id === "forge" ? 190 : 230) * WORLD_ITEM_DRAW_SCALE;
       ctx.save();
       ctx.translate(base.x, base.y);
       ctx.scale(z, z);
       ctx.fillStyle = "rgba(0,0,0,0.45)";
       ctx.beginPath();
-      ctx.ellipse(0, 24, b.w * 42, b.h * 18, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 24, b.w * 42 * WORLD_ITEM_DRAW_SCALE, b.h * 18 * WORLD_ITEM_DRAW_SCALE, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.drawImage(generated, -width / 2, -height + 38, width, height);
       if (b.open || state.inside === b.id) {
@@ -1622,11 +2305,11 @@ function drawBuildings() {
       ctx.textAlign = "center";
       ctx.fillText(b.name, 0, b.h * 26 + 18);
       ctx.restore();
-      continue;
+      return;
     }
     ctx.save();
     ctx.translate(base.x, base.y);
-    ctx.scale(z, z);
+    ctx.scale(z * WORLD_ITEM_DRAW_SCALE, z * WORLD_ITEM_DRAW_SCALE);
     ctx.fillStyle = "rgba(0,0,0,0.42)";
     ctx.beginPath();
     ctx.ellipse(0, 30, b.w * 40, b.h * 18, 0, 0, Math.PI * 2);
@@ -1654,21 +2337,20 @@ function drawBuildings() {
     ctx.textAlign = "center";
     ctx.fillText(b.name, 0, b.h * 26 + 18);
     ctx.restore();
-  }
 }
 
 function assetLoaded(image) {
   return image && image.complete && image.naturalWidth > 0;
 }
 
-function drawBiomeSprite(id, x, y, width, height, dir = 1) {
+function drawBiomeSprite(id, x, y, width, height, dir = 1, minZoom = 0) {
   const sprite = biomeSprites[id];
   const image = sprite && biomeAssets[sprite.atlas];
   if (!sprite || !assetLoaded(image)) return false;
   const rect = sprite.approxRect;
-  const z = state.camera.zoom;
-  const dw = width * z;
-  const dh = height * z;
+  const z = Math.max(state.camera.zoom, minZoom);
+  const dw = width * z * WORLD_ITEM_DRAW_SCALE;
+  const dh = height * z * WORLD_ITEM_DRAW_SCALE;
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(dir === -1 ? -1 : 1, 1);
@@ -1701,12 +2383,17 @@ function drawActor(actor) {
   }
   const bob = Math.sin((actor.walkT || 0) * 2.1) * 4;
   const attack = actor.attackT > 0 ? Math.sin(actor.attackT * 24) * 8 : 0;
+  const shake = actor.shakeT > 0 ? {
+    x: (Math.random() - 0.5) * 9 * (actor.kind === "enemy" ? ENEMY_DRAW_SCALE : 1),
+    y: (Math.random() - 0.5) * 7 * (actor.kind === "enemy" ? ENEMY_DRAW_SCALE : 1)
+  } : { x: 0, y: 0 };
   ctx.save();
-  ctx.translate(p.x, p.y);
+  ctx.translate(p.x + shake.x, p.y + shake.y);
   ctx.scale(z * (actor.dir === -1 ? -1 : 1), z);
+  const actorScale = actor.kind === "enemy" ? ENEMY_DRAW_SCALE : 1;
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.beginPath();
-  ctx.ellipse(0, 17, 25, 10, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 17, 25 * actorScale, 10 * actorScale, 0, 0, Math.PI * 2);
   ctx.fill();
   if (actor.kind === "player" && actor.id === state.activeHeroId) {
     ctx.strokeStyle = "#f0c46a";
@@ -1716,12 +2403,35 @@ function drawActor(actor) {
     ctx.stroke();
   }
   const frame = actorSpriteFrame(actor.sprite);
-  const redFlash = actor.kind === "player" && actor.lowHealthHitT > 0 && actor.hp / actor.maxHp <= LOW_HEALTH_FLASH_THRESHOLD && Math.floor(performance.now() / 90) % 2 === 0;
-  if (redFlash) ctx.filter = "brightness(1.25) sepia(1) saturate(7) hue-rotate(-28deg)";
-  drawSprite(actor.sprite, frame.x + attack, frame.y + bob, frame.w, frame.h);
-  if (redFlash) ctx.filter = "none";
+  const hurtPulse = actor.kind === "player" && actor.lowHealthHitT > 0 && actor.hp / actor.maxHp <= LOW_HEALTH_FLASH_THRESHOLD;
+  const impactPulse = actor.flashT > 0;
+  if (hurtPulse) {
+    ctx.filter = "brightness(1.18) sepia(0.55) saturate(1.8) hue-rotate(-18deg)";
+  } else if (impactPulse) {
+    ctx.filter = actor.flashColor === "#12040c"
+      ? "brightness(1.22) contrast(1.22) saturate(0.82)"
+      : "brightness(1.28) saturate(1.18)";
+  }
+  const spriteYOffset = actor.kind === "player" || actor.kind === "enemy" ? PLAYER_ENEMY_SPRITE_Y_OFFSET : 0;
+  drawSprite(
+    actor.sprite,
+    frame.x * actorScale + attack * actorScale,
+    frame.y * actorScale + bob * actorScale + spriteYOffset,
+    frame.w * actorScale,
+    frame.h * actorScale
+  );
   if (actor.kind === "player" && !spriteLookup[actor.sprite]?.fullBody) {
-    drawSprite(actor.equipment.weapon, 13 + attack, -48 + bob, 36, 56);
+    drawSprite(actor.equipment.weapon, 13 + attack, -48 + bob + spriteYOffset, 36, 56);
+  }
+  if (hurtPulse || impactPulse) {
+    const pulseAlpha = clamp(Math.max(actor.lowHealthHitT || 0, actor.flashT || 0) * 2.4, 0.08, 0.32);
+    ctx.globalAlpha = pulseAlpha;
+    ctx.fillStyle = actor.flashColor === "#12040c" ? "#2a0618" : actor.kind === "player" ? "#ff6f4f" : "#fff0b0";
+    ctx.beginPath();
+    ctx.ellipse(0, 16, 34 * actorScale, 16 * actorScale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.filter = "none";
   }
   ctx.restore();
 
@@ -1731,13 +2441,15 @@ function drawActor(actor) {
 
 function drawNameplate(actor, p) {
   const z = state.camera.zoom;
-  const w = 62 * z;
+  if (z < 0.3) return;
+  const actorScale = actor.kind === "enemy" ? ENEMY_DRAW_SCALE : 1;
+  const w = 62 * z * actorScale;
   const h = 6;
   ctx.fillStyle = "rgba(0,0,0,0.65)";
-  ctx.fillRect(p.x - w / 2, p.y - 76 * z, w, h);
+  ctx.fillRect(p.x - w / 2, p.y - 76 * z * actorScale, w, h);
   ctx.fillStyle = "#ad1d1d";
-  ctx.fillRect(p.x - w / 2, p.y - 76 * z, w * (actor.hp / actor.maxHp), h);
-  drawLabel(actor.name, p.x, p.y - 88 * z, "#ffb18c");
+  ctx.fillRect(p.x - w / 2, p.y - 76 * z * actorScale, w * (actor.hp / actor.maxHp), h);
+  drawLabel(actor.name, p.x, p.y - 88 * z * actorScale, "#ffb18c");
 }
 
 function drawLoot(loot) {
@@ -1746,9 +2458,9 @@ function drawLoot(loot) {
   ctx.save();
   ctx.translate(p.x, p.y + Math.sin(performance.now() / 240) * 3);
   ctx.scale(z, z);
-  drawSprite(loot.id, -18, -38, 36, 36);
+  drawSprite(loot.id, -18 * WORLD_ITEM_DRAW_SCALE, -38 * WORLD_ITEM_DRAW_SCALE, 36 * WORLD_ITEM_DRAW_SCALE, 36 * WORLD_ITEM_DRAW_SCALE);
   ctx.restore();
-  drawLabel(itemName(loot.id), p.x, p.y - 44 * z, loot.id === "runeShard" ? "#b16bff" : "#e8c06a");
+  drawLabel(itemName(loot.id), p.x, p.y - 44 * z * WORLD_ITEM_DRAW_SCALE, loot.id === "runeShard" ? "#b16bff" : "#e8c06a");
 }
 
 function actorSpriteFrame(id) {
@@ -1783,14 +2495,20 @@ function resolveDrawableSprite(id) {
   return null;
 }
 
+function makeCanvasBuffer(width, height) {
+  const buffer = typeof OffscreenCanvas === "function"
+    ? new OffscreenCanvas(width, height)
+    : document.createElement("canvas");
+  buffer.width = width;
+  buffer.height = height;
+  return { canvas: buffer, ctx: buffer.getContext("2d", { willReadFrequently: true }) };
+}
+
 function keyedSpriteCanvas(id, sprite, image) {
   if (keyedSpriteCache[id]) return keyedSpriteCache[id];
   const width = sprite.width || SPRITE_CELL;
   const height = sprite.height || SPRITE_CELL;
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const buffer = canvas.getContext("2d", { willReadFrequently: true });
+  const { canvas, ctx: buffer } = makeCanvasBuffer(width, height);
   buffer.drawImage(image, sprite.x, sprite.y, width, height, 0, 0, width, height);
   const pixels = buffer.getImageData(0, 0, width, height);
   for (let i = 0; i < pixels.data.length; i += 4) {
@@ -1809,6 +2527,7 @@ function keyedSpriteCanvas(id, sprite, image) {
 }
 
 function drawLabel(text, x, y, color) {
+  if (state.camera.zoom < 0.24) return;
   ctx.save();
   ctx.font = "14px Georgia";
   const width = ctx.measureText(text).width + 14;
@@ -1839,12 +2558,151 @@ function drawProjectiles() {
   }
 }
 
+function drawSpellEffects() {
+  const now = performance.now() / 80;
+  for (const effect of state.spellEffects) {
+    const casterPoint = worldToScreen(effect.caster.x, effect.caster.y);
+    const age = 1 - clamp(effect.life / effect.maxLife, 0, 1);
+    const travel = 1 - Math.pow(1 - clamp(age * 1.75, 0, 1), 3);
+    for (let index = 0; index < effect.targets.length; index++) {
+      const target = effect.targets[index];
+      const targetPoint = worldToScreen(target.x, target.y);
+      const from = { x: casterPoint.x, y: casterPoint.y - 54 * state.camera.zoom };
+      const to = { x: targetPoint.x, y: targetPoint.y - 52 * state.camera.zoom };
+      const movingTo = {
+        x: from.x + (to.x - from.x) * travel,
+        y: from.y + (to.y - from.y) * travel
+      };
+      drawFractalMagicBolt(from, movingTo, effect, now + index * 7, travel);
+      if (travel > 0.78) drawLightningImpact(to, effect, now + index * 11, travel);
+    }
+  }
+}
+
+function lightningNoise(effect, phase, level, index, channel = 0) {
+  const seed = Math.floor(effect.seed || 1);
+  const stable = hash2(seed + level * 131 + channel * 977, index * 197 + channel * 431, WORLD_SEED + channel * 53);
+  const animated = Math.sin(phase * (0.75 + channel * 0.17) + stable * Math.PI * 2 + level * 1.9 + index * 0.73);
+  return (stable - 0.5) * 1.35 + animated * 0.42;
+}
+
+function buildFractalLightningPoints(from, to, effect, phase, depth = 5, strength = 1) {
+  let points = [from, to];
+  for (let level = 0; level < depth; level++) {
+    const next = [points[0]];
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const nx = -dy / len;
+      const ny = dx / len;
+      const t = (i + 0.5) / Math.max(1, points.length - 1);
+      const taper = Math.sin(Math.PI * t);
+      const maxJolt = (effect.kind === "bloodHex" ? 18 : 34) * state.camera.zoom * strength;
+      const amplitude = Math.min(len * 0.55, maxJolt) * Math.pow(0.58, level) * (0.35 + taper * 0.85);
+      const side = lightningNoise(effect, phase, level, i, 0) * amplitude;
+      const along = lightningNoise(effect, phase, level, i, 1) * amplitude * 0.18;
+      next.push({
+        x: (a.x + b.x) * 0.5 + nx * side + (dx / len) * along,
+        y: (a.y + b.y) * 0.5 + ny * side + (dy / len) * along
+      });
+      next.push(b);
+    }
+    points = next;
+  }
+  return points;
+}
+
+function drawBoltPath(points) {
+  ctx.beginPath();
+  points.forEach((point, i) => i ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+  ctx.stroke();
+}
+
+function drawFractalMagicBolt(from, to, effect, phase, travel = 1) {
+  const isBlood = effect.kind === "bloodHex";
+  const points = buildFractalLightningPoints(from, to, effect, phase, isBlood ? 4 : 5, isBlood ? 0.72 : 1);
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const pulse = 0.78 + Math.sin(phase * 1.7 + effect.seed) * 0.22;
+  const alpha = clamp(effect.life / effect.maxLife, 0.25, 1) * clamp(travel * 1.7, 0.3, 1);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = effect.secondaryColor;
+  ctx.shadowBlur = isBlood ? 16 : 30;
+  ctx.strokeStyle = effect.color;
+  ctx.lineWidth = (isBlood ? 4.5 : 8) * state.camera.zoom * pulse;
+  drawBoltPath(points);
+  ctx.strokeStyle = effect.secondaryColor;
+  ctx.lineWidth = (isBlood ? 1.8 : 2.4) * state.camera.zoom;
+  drawBoltPath(points);
+
+  if (effect.kind === "lightning" || isBlood) {
+    ctx.strokeStyle = "rgba(255,255,255,0.82)";
+    ctx.lineWidth = 1.1 * state.camera.zoom;
+    const forkStep = isBlood ? 9 : 7;
+    for (let i = 3; i < points.length - 3; i += forkStep) {
+      if (hash2(Math.floor(effect.seed) + i, Math.floor(phase * 10), WORLD_SEED + i) < 0.32) continue;
+      const point = points[i];
+      const prev = points[i - 1];
+      const next = points[i + 1];
+      const tx = next.x - prev.x;
+      const ty = next.y - prev.y;
+      const tLen = Math.max(1, Math.hypot(tx, ty));
+      const branchSide = lightningNoise(effect, phase, 7, i, 2) < 0 ? -1 : 1;
+      const branchLength = Math.min(len * 0.18, (isBlood ? 34 : 52) * state.camera.zoom) * (0.55 + Math.abs(lightningNoise(effect, phase, 8, i, 3)) * 0.45);
+      const end = {
+        x: point.x + ((-ty / tLen) * branchSide + tx / tLen * 0.28) * branchLength,
+        y: point.y + ((tx / tLen) * branchSide + ty / tLen * 0.28) * branchLength
+      };
+      const branch = buildFractalLightningPoints(point, end, effect, phase + i * 0.37, 2, 0.45);
+      drawBoltPath(branch);
+    }
+  }
+  ctx.restore();
+}
+
+function drawLightningImpact(point, effect, phase, travel) {
+  const hitAlpha = clamp((travel - 0.78) / 0.22, 0, 1) * clamp(effect.life / effect.maxLife, 0.25, 1);
+  const radius = (18 + Math.sin(phase * 1.4) * 4) * state.camera.zoom;
+  ctx.save();
+  ctx.globalAlpha = hitAlpha;
+  ctx.strokeStyle = effect.secondaryColor;
+  ctx.shadowColor = effect.secondaryColor;
+  ctx.shadowBlur = 18;
+  ctx.lineWidth = 2 * state.camera.zoom;
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = effect.kind === "bloodHex" ? "rgba(130, 8, 54, 0.22)" : "rgba(113, 224, 255, 0.2)";
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius * 0.7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawParticles() {
   for (const p of state.particles) {
     const s = worldToScreen(p.x, p.y);
     ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
     ctx.fillStyle = p.color;
-    ctx.fillRect(s.x, s.y - 38 * state.camera.zoom, p.size, p.size);
+    if (p.shape === "spark") {
+      ctx.save();
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y - 38 * state.camera.zoom, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.fillRect(s.x, s.y - 38 * state.camera.zoom, p.size, p.size);
+    }
     ctx.globalAlpha = 1;
   }
   for (const f of state.floating) {
@@ -1856,6 +2714,16 @@ function drawParticles() {
     ctx.fillText(f.text, s.x, s.y - 76 * state.camera.zoom);
     ctx.globalAlpha = 1;
   }
+}
+
+function drawScreenEffects() {
+  if (state.screenFlash <= 0) return;
+  const alpha = clamp(state.screenFlash / 0.5, 0, 0.24);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#5b0d0d";
+  ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+  ctx.restore();
 }
 
 function drawInteriorOverlay() {
@@ -1907,6 +2775,16 @@ function drawMiniMap() {
   miniCtx.fill();
 }
 
+function drawMiniMapThrottled(force = false) {
+  const now = performance.now();
+  const hero = activeHero();
+  const key = `${Math.floor(hero.x)},${Math.floor(hero.y)},${state.enemies.length},${state.buildings.length}`;
+  if (!force && key === lastMiniMapKey && now - lastMiniMapRender < MINIMAP_FRAME_MS) return;
+  lastMiniMapKey = key;
+  lastMiniMapRender = now;
+  drawMiniMap();
+}
+
 function castRing(x, y, color) {
   const s = worldToScreen(x, y);
   const ring = document.createElement("i");
@@ -1929,6 +2807,22 @@ function burst(x, y, color, count) {
       size: 2 + Math.random() * 4,
       life: 0.35 + Math.random() * 0.4,
       maxLife: 0.75
+    });
+  }
+}
+
+function magicBurst(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    state.particles.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 2.8,
+      vy: (Math.random() - 0.5) * 2.8,
+      color,
+      size: 2 + Math.random() * 5,
+      life: 0.25 + Math.random() * 0.45,
+      maxLife: 0.7,
+      shape: "spark"
     });
   }
 }
@@ -1972,7 +2866,7 @@ function renderInventory() {
   const hero = activeHero();
   document.querySelector("#inventoryPanel h2").textContent = `${hero.name} Inventory`;
   grid.innerHTML = "";
-  const pageSize = 12;
+  const pageSize = 8;
   const pages = Math.max(1, Math.ceil(hero.inventory.length / pageSize));
   for (let pageIndex = 0; pageIndex < pages; pageIndex++) {
     const page = document.createElement("div");
@@ -2013,15 +2907,102 @@ function renderInventory() {
     const labels = { weapon: "Weapon", helm: "Helm", chest: "Armour", gloves: "Gloves", boots: "Boots", trinket: "Trinket", offhand: "Offhand" };
     const label = labels[slot.dataset.slot] || slot.dataset.slot;
     slot.innerHTML = `<span class="slot-label">${label}</span>${id ? `<span class="sprite" data-sprite="${id}"></span>` : ""}`;
-    slot.addEventListener("dragover", event => event.preventDefault());
-    slot.addEventListener("drop", event => {
+    slot.ondragover = event => event.preventDefault();
+    slot.ondrop = event => {
       event.preventDefault();
       equipDraggedItem(slot.dataset.slot);
-    });
+    };
   });
   document.getElementById("goldCount").textContent = hero.gold;
   document.getElementById("runeCount").textContent = hero.inventory.find(i => i.id === "runeShard")?.qty || 0;
+  renderSkills();
   applySpriteStyles();
+}
+
+function renderSkills() {
+  const hero = activeHero();
+  normalizeHeroSkills();
+  const skillBar = document.getElementById("skillBar");
+  const knownGrid = document.getElementById("knownSkillGrid");
+  if (!skillBar || !knownGrid) return;
+  const keys = ["1", "2", "3", "4", "5", "6"];
+  skillBar.innerHTML = "";
+  hero.skills.bar.forEach((id, index) => {
+    const skill = skillInfo[id];
+    const item = itemInfo[id];
+    const button = document.createElement("button");
+    button.className = "skill";
+    button.dataset.slot = index;
+    button.title = skill ? `${skill.name} - ${skill.buff}` : item ? item.name : "Empty skill slot";
+    if (skill && state.mode === id) button.classList.add("active");
+    if (id) button.dataset.action = id;
+    const icon = skill?.icon || id;
+    button.innerHTML = id ? `<span class="sprite" data-sprite="${icon}"></span>` : "";
+    button.addEventListener("click", () => activateHotbarSlot(index));
+    button.addEventListener("dragover", event => event.preventDefault());
+    button.addEventListener("drop", event => {
+      event.preventDefault();
+      assignDraggedSkill(index);
+    });
+    skillBar.appendChild(button);
+  });
+
+  knownGrid.innerHTML = "";
+  for (const id of hero.skills.known) {
+    const skill = skillInfo[id];
+    if (!skill) continue;
+    const button = document.createElement("button");
+    button.className = "inventory-slot";
+    if (state.selectedSkill === id) button.classList.add("selected");
+    button.dataset.skill = id;
+    button.draggable = true;
+    button.title = `${skill.name} - ${skill.buff}`;
+    button.innerHTML = `<span class="sprite" data-sprite="${skill.icon}"></span>`;
+    button.addEventListener("click", () => selectSkill(id));
+    button.addEventListener("dblclick", () => {
+      const empty = hero.skills.bar.findIndex(slot => !slot);
+      hero.skills.bar[empty >= 0 ? empty : 0] = id;
+      state.mode = id;
+      renderSkills();
+      saveGame(true);
+    });
+    button.addEventListener("dragstart", event => {
+      state.draggedSkill = id;
+      event.dataTransfer.setData("text/plain", id);
+    });
+    knownGrid.appendChild(button);
+  }
+  applySpriteStyles();
+}
+
+function activateHotbarSlot(index) {
+  const id = activeHero().skills.bar[index];
+  if (!id) return;
+  if (skillInfo[id]) {
+    setMode(id);
+    selectSkill(id);
+  } else if (itemInfo[id]) {
+    useItem(id);
+  }
+}
+
+function assignDraggedSkill(index) {
+  const id = state.draggedSkill;
+  if (!id || !skillInfo[id]) return;
+  activeHero().skills.bar[index] = id;
+  state.mode = id;
+  state.draggedSkill = null;
+  renderSkills();
+  saveGame(true);
+}
+
+function selectSkill(id) {
+  const skill = skillInfo[id];
+  if (!skill) return;
+  state.selectedSkill = id;
+  state.selectedItem = null;
+  document.getElementById("itemDetails").innerHTML = `<strong>${skill.name}</strong><span>${skill.text} Buff: ${skill.buff}. Cost: ${skill.cost} ${skill.resource}. Drag this skill onto the hotbar.</span>`;
+  renderSkills();
 }
 
 function moveDraggedToInventory(targetIndex) {
@@ -2068,6 +3049,7 @@ function equipDraggedItem(slot) {
 
 function selectItem(id) {
   state.selectedItem = id;
+  state.selectedSkill = null;
   const item = itemInfo[id] || {};
   document.getElementById("itemDetails").innerHTML = `<strong>${itemName(id)}</strong><span>${item.text || "A strange thing from the dark."} ${item.slot ? "Double click to equip." : item.use ? "Double click to use." : ""}</span>`;
   renderInventory();
@@ -2078,12 +3060,70 @@ function toggleInventory() {
   updateHudLayout();
 }
 
+function restartGame() {
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
 function setMode(mode) {
+  if (!skillInfo[mode]) return;
   state.mode = mode;
-  document.querySelectorAll(".skill[data-mode]").forEach(btn => btn.classList.toggle("active", btn.dataset.mode === mode));
+  document.querySelectorAll(".skill[data-action]").forEach(btn => btn.classList.toggle("active", btn.dataset.action === mode));
+  renderSkills();
+}
+
+let cameraDrag = null;
+let suppressNextCanvasClick = false;
+const CAMERA_DRAG_THRESHOLD = 4;
+
+function startCameraDrag(event) {
+  if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
+  if (event.button !== 0) event.preventDefault();
+  cameraDrag = {
+    pointerId: event.pointerId,
+    button: event.button,
+    startX: event.clientX,
+    startY: event.clientY,
+    x: event.clientX,
+    y: event.clientY,
+    moved: false
+  };
+  if (event.button !== 0) state.camera.mode = "free";
+  canvas.setPointerCapture?.(event.pointerId);
+}
+
+function moveCameraDrag(event) {
+  if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+  const totalMoved = Math.hypot(event.clientX - cameraDrag.startX, event.clientY - cameraDrag.startY);
+  if (cameraDrag.button === 0 && !cameraDrag.moved && totalMoved < CAMERA_DRAG_THRESHOLD) return;
+  cameraDrag.moved = true;
+  state.camera.mode = "free";
+  event.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const before = screenToWorld(cameraDrag.x - rect.left, cameraDrag.y - rect.top);
+  const after = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+  const dx = before.x - after.x;
+  const dy = before.y - after.y;
+  state.camera.x += dx;
+  state.camera.y += dy;
+  state.camera.targetX += dx;
+  state.camera.targetY += dy;
+  cameraDrag.x = event.clientX;
+  cameraDrag.y = event.clientY;
+}
+
+function endCameraDrag(event) {
+  if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+  suppressNextCanvasClick = !!cameraDrag.moved;
+  cameraDrag = null;
+  canvas.releasePointerCapture?.(event.pointerId);
 }
 
 function handleCanvasClick(event) {
+  if (cameraDrag || suppressNextCanvasClick) {
+    suppressNextCanvasClick = false;
+    return;
+  }
   const rect = canvas.getBoundingClientRect();
   const sx = event.clientX - rect.left;
   const sy = event.clientY - rect.top;
@@ -2096,8 +3136,9 @@ function handleCanvasClick(event) {
   if (target && target.d < 0.9) attack(target.e);
   else if (!tileBlocked(world.x, world.y)) {
     const hero = activeHero();
-    hero.x = hero.x + (world.x - hero.x) * 0.12;
-    hero.y = hero.y + (world.y - hero.y) * 0.12;
+    const nx = hero.x + (world.x - hero.x) * 0.12;
+    const ny = hero.y + (world.y - hero.y) * 0.12;
+    moveEntityWithCollision(hero, nx, ny);
   }
 }
 
@@ -2106,7 +3147,7 @@ function bindEvents() {
   addEventListener("keydown", event => {
     const key = event.key.toLowerCase();
     state.keys.add(key);
-    if (["1", "2", "3", "4"].includes(key)) setMode(["melee", "ranged", "fire", "frost"][Number(key) - 1]);
+    if (["1", "2", "3", "4", "5", "6"].includes(key)) activateHotbarSlot(Number(key) - 1);
     if (["f1", "f2", "f3"].includes(key)) {
       event.preventDefault();
       setActiveHero(state.heroes[Number(key.slice(1)) - 1]?.id);
@@ -2123,6 +3164,7 @@ function bindEvents() {
     if (key === "q") useItem("redPotion");
     if (key === "r") useItem("bluePotion");
     if (key === "i") toggleInventory();
+    if (key === "m") enableFollowCamera();
     if (key === "e") {
       const npc = nearestNpc();
       if (npc) openChat(npc);
@@ -2131,21 +3173,24 @@ function bindEvents() {
   });
   addEventListener("keyup", event => state.keys.delete(event.key.toLowerCase()));
   canvas.addEventListener("click", handleCanvasClick);
+  canvas.addEventListener("contextmenu", event => event.preventDefault());
+  canvas.addEventListener("pointerdown", startCameraDrag);
+  canvas.addEventListener("pointermove", moveCameraDrag);
+  canvas.addEventListener("pointerup", endCameraDrag);
+  canvas.addEventListener("pointercancel", endCameraDrag);
   canvas.addEventListener("wheel", event => {
     event.preventDefault();
-    state.camera.zoom = clamp(state.camera.zoom + (event.deltaY < 0 ? 0.08 : -0.08), 0.72, 1.55);
+    const rect = canvas.getBoundingClientRect();
+    const factor = Math.exp(-event.deltaY * 0.0015);
+    zoomCameraBy(factor, event.clientX - rect.left, event.clientY - rect.top);
   }, { passive: false });
-  document.getElementById("zoomIn").addEventListener("click", () => state.camera.zoom = clamp(state.camera.zoom + 0.1, 0.72, 1.55));
-  document.getElementById("zoomOut").addEventListener("click", () => state.camera.zoom = clamp(state.camera.zoom - 0.1, 0.72, 1.55));
-  document.getElementById("centerView").addEventListener("click", () => {
-    state.camera.x = activeHero().x;
-    state.camera.y = activeHero().y;
-  });
+  document.getElementById("zoomIn").addEventListener("click", () => zoomCameraBy(1.28, canvas.clientWidth * 0.5, canvas.clientHeight * 0.5));
+  document.getElementById("zoomOut").addEventListener("click", () => zoomCameraBy(1 / 1.28, canvas.clientWidth * 0.5, canvas.clientHeight * 0.5));
+  document.getElementById("centerView").addEventListener("click", () => enableFollowCamera());
   document.getElementById("toggleInventory").addEventListener("click", toggleInventory);
   document.getElementById("inventoryHandle").addEventListener("click", toggleInventory);
+  document.getElementById("restartGame").addEventListener("click", restartGame);
   document.getElementById("closeChat").addEventListener("click", () => document.getElementById("chatPanel").classList.remove("open"));
-  document.querySelectorAll(".skill[data-mode]").forEach(btn => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
-  document.querySelectorAll(".skill[data-use]").forEach(btn => btn.addEventListener("click", () => useItem(btn.dataset.use)));
   document.querySelectorAll(".party-member[data-hero]").forEach(member => member.addEventListener("click", () => setActiveHero(member.dataset.hero)));
   document.getElementById("chatForm").addEventListener("submit", event => {
     event.preventDefault();
@@ -2163,6 +3208,9 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+let lastHudRender = 0;
+let lastMiniMapRender = 0;
+let lastMiniMapKey = "";
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
@@ -2176,14 +3224,16 @@ async function start() {
   resize();
   buildWorld();
   restoreSave();
-  state.camera.x = activeHero().x;
-  state.camera.y = activeHero().y;
+  if (state.camera.mode !== "free") {
+    enableFollowCamera(true);
+  }
   refreshActiveWorld();
   bindEvents();
   renderInventory();
   renderHud();
   await loadAssets();
   renderInventory();
+  drawMiniMapThrottled(true);
   requestAnimationFrame(loop);
 }
 
