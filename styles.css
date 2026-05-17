@@ -106,6 +106,20 @@ input {
   border-color: #b77b2c;
 }
 
+.progression-toggle {
+  position: absolute;
+  right: 342px;
+  top: 12px;
+  z-index: 7;
+  width: 42px;
+  height: 34px;
+  padding: 0;
+  color: #ffdf9b;
+  font-weight: bold;
+  text-shadow: 0 1px 2px #000;
+  cursor: pointer;
+}
+
 .party-member {
   display: grid;
   grid-template-columns: 62px 1fr;
@@ -166,9 +180,13 @@ input {
   position: absolute;
   top: 20px;
   right: 448px;
-  width: 260px;
-  padding: 14px;
-  --panel-image: url("assets/ui/quest-panel.png");
+  width: 284px;
+  height: 170px;
+  z-index: 7;
+  --frame: 42px;
+  --frame-x: 34px;
+  --frame-top: 38px;
+  --frame-bottom: 32px;
 }
 
 .quest-panel h1,
@@ -186,6 +204,47 @@ input {
   font-size: 16px;
 }
 
+.framed-panel {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(240, 196, 106, 0.08), transparent 34%),
+    #070807;
+  filter: drop-shadow(0 18px 42px rgba(0, 0, 0, 0.68));
+}
+
+.framed-panel::before {
+  content: "";
+  position: absolute;
+  inset: var(--frame-top) var(--frame-x) var(--frame-bottom);
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)),
+    linear-gradient(180deg, rgba(14, 11, 9, 0.86), rgba(4, 5, 5, 0.88));
+  border: 1px solid rgba(108, 68, 24, 0.72);
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.72);
+}
+
+.panel-frame {
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.framed-content {
+  position: absolute;
+  inset: var(--frame-top) var(--frame-x) var(--frame-bottom);
+  z-index: 2;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.quest-content {
+  padding: 2px 6px;
+}
+
 .minimap {
   position: absolute;
   top: 20px;
@@ -194,6 +253,22 @@ input {
   height: 192px;
   padding: 0;
   --panel-image: url("assets/ui/minimap-frame.png");
+}
+
+.minimap-zoom {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 2;
+  min-width: 46px;
+  padding: 2px 6px;
+  border: 1px solid rgba(238, 196, 111, 0.42);
+  background: rgba(5, 6, 6, 0.62);
+  color: #f4ddaa;
+  font: bold 12px/1.2 Georgia, serif;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
 }
 
 #miniMap {
@@ -376,10 +451,231 @@ input {
 }
 
 .inventory header,
-.chat-panel header {
+.chat-panel header,
+.progression-panel header {
   position: relative;
   min-height: 28px;
   text-align: center;
+}
+
+.progression-panel {
+  position: absolute;
+  left: 12px;
+  top: 258px;
+  z-index: 13;
+  width: 448px;
+  height: min(520px, calc(100vh - 274px));
+  min-height: 392px;
+  --frame: 50px;
+  --frame-x: 42px;
+  --frame-top: 56px;
+  --frame-bottom: 40px;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.progression-panel.collapsed {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-14px);
+}
+
+.progression-panel h2 {
+  margin: 0;
+  color: var(--gold-soft);
+  font-size: 18px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.progression-content {
+  display: grid;
+  grid-template-rows: 32px 82px minmax(88px, 1fr) minmax(120px, 1.1fr);
+  gap: 10px;
+}
+
+.level-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.level-summary > div {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(158, 103, 30, 0.68);
+  background: rgba(4, 6, 6, 0.72);
+}
+
+.level-summary span {
+  display: block;
+  overflow: hidden;
+  color: #cdbb91;
+  font-size: 11px;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.level-summary strong {
+  display: block;
+  margin-top: 5px;
+  color: #ffe2a0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.xp-track {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 18px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.xp-track span {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  color: #f7deb0;
+  font-size: 12px;
+  line-height: 16px;
+  text-transform: none;
+  text-shadow: 0 1px 2px #000;
+}
+
+.xp-track i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #7a2dff, #25c7d8, #f0c46a);
+  box-shadow: 0 0 16px rgba(126, 209, 232, 0.34);
+  transition: width 180ms ease;
+}
+
+.attribute-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  overflow: auto;
+  scrollbar-color: #a9792c #0a0806;
+  scrollbar-width: thin;
+}
+
+.attribute-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px 1fr 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid rgba(158, 103, 30, 0.68);
+  background: rgba(4, 6, 6, 0.72);
+}
+
+.attribute-row b {
+  color: #ffe2a0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.attribute-row span {
+  min-width: 0;
+  overflow: hidden;
+  color: #d6c59a;
+  font-size: 12px;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.attribute-row small {
+  display: block;
+  color: #9f8f6e;
+  font-size: 11px;
+}
+
+.attribute-row button,
+.skill-node button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #6e4619;
+  color: #f4ddaa;
+  background:
+    url("assets/ui/button-gold.png") center / 100% 100% no-repeat,
+    linear-gradient(180deg, rgba(205, 142, 43, 0.18), rgba(22, 17, 13, 0.84)),
+    #15100c;
+  cursor: pointer;
+}
+
+.attribute-row button:disabled,
+.skill-node button:disabled {
+  color: #74644c;
+  cursor: default;
+  filter: grayscale(1);
+}
+
+.skill-tree {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-color: #a9792c #0a0806;
+  scrollbar-width: thin;
+}
+
+.skill-node {
+  min-width: 0;
+  min-height: 94px;
+  padding: 6px;
+  border: 1px solid rgba(158, 103, 30, 0.74);
+  background:
+    radial-gradient(circle at 50% 28%, rgba(126, 209, 232, 0.12), transparent 42%),
+    rgba(4, 6, 6, 0.78);
+  display: grid;
+  grid-template-rows: 42px auto auto;
+  gap: 4px;
+  text-align: center;
+}
+
+.skill-node.locked {
+  opacity: 0.62;
+}
+
+.skill-node.maxed {
+  border-color: rgba(240, 196, 106, 0.86);
+  box-shadow: inset 0 0 16px rgba(240, 196, 106, 0.12);
+}
+
+.skill-node .sprite {
+  --sprite-size: 38px;
+  margin: 0 auto;
+}
+
+.skill-node strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #ffe2a0;
+  font-size: 12px;
+  line-height: 1.05;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.skill-node small {
+  min-height: 24px;
+  color: #b9a984;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.skill-node button {
+  justify-self: center;
 }
 
 .close-button {
@@ -428,10 +724,10 @@ input {
 }
 
 .equip-weapon .sprite {
-  --sprite-size: 76px;
+  --sprite-size: 56px;
   display: block;
-  margin: 38px auto 0;
-  transform: scale(1.5);
+  margin: 23.5px auto 0;
+  transform: scale(2);
   transform-origin: center;
 }
 
@@ -557,6 +853,11 @@ input {
   margin-right: auto;
 }
 
+.inventory-slot.weapon-slot .sprite {
+  transform: scale(1.5);
+  transform-origin: center;
+}
+
 .inventory-slot small {
   position: absolute;
   right: 5px;
@@ -649,12 +950,26 @@ input {
   background-size: contain;
 }
 
+.orb-fill-overlay {
+  position: absolute;
+  inset: calc(var(--orb-art-bleed) * -1);
+  z-index: 2;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: calc(50% + var(--orb-art-offset-x)) center;
+  background-size: contain;
+  clip-path: inset(calc(100% - var(--orb-fill)) 0 0 0);
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  transition: clip-path 140ms ease;
+}
+
 .orb span {
   position: absolute;
   left: 50%;
   top: 70%;
   transform: translate(-50%, -50%);
-  z-index: 2;
+  z-index: 3;
   min-width: 58px;
   padding: 2px 5px;
   color: #fff1d0;
@@ -676,12 +991,24 @@ input {
   background-image: url("assets/ui/health-orb.png");
 }
 
+.health-orb .orb-fill-overlay {
+  background:
+    linear-gradient(rgba(255, 31, 22, 0.62), rgba(255, 31, 22, 0.62)),
+    url("assets/ui/health-orb.png") calc(50% + var(--orb-art-offset-x)) center / contain no-repeat;
+}
+
 .mana-orb {
   --orb-liquid: rgba(18, 96, 190, 0.7);
 }
 
 .mana-orb::after {
   background-image: url("assets/ui/mana-orb.png");
+}
+
+.mana-orb .orb-fill-overlay {
+  background:
+    linear-gradient(rgba(18, 144, 255, 0.62), rgba(18, 144, 255, 0.62)),
+    url("assets/ui/mana-orb.png") calc(50% + var(--orb-art-offset-x)) center / contain no-repeat;
 }
 
 .skill-bar {

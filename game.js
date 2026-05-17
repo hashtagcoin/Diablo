@@ -14,6 +14,8 @@ const WORLD_SEED = 93217;
 const SPRITE_CELL = 128;
 const ATLAS_DISPLAY = 322;
 const ATLAS_SIZE = 736;
+const ITEM_ATLAS_WIDTH = 499;
+const ITEM_ATLAS_HEIGHT = 602;
 const LOW_HEALTH_FLASH_THRESHOLD = 0.35;
 const LOW_HEALTH_FLASH_DURATION = 0.7;
 const ENEMY_DRAW_SCALE = 0.75;
@@ -40,10 +42,38 @@ const DECAL_FULL_ZOOM = 0.2;
 const FAR_PROP_MIN_RENDER_ZOOM = 0.38;
 const SURFACE_GRASS_MIN_ZOOM = 0.46;
 const SURFACE_GRASS_FULL_ZOOM = 0.62;
-const SURFACE_GRASS_WORLD_WIDTH = 120;
+const SURFACE_GRASS_WORLD_WIDTH = 240;
+const AMBIENT_MUSIC_SRC = "assets/Music/Blackened Catacombs.mp3";
+const COMBAT_MUSIC_SRC = "assets/Music/Blood Sigil Chase.mp3";
+const AMBIENT_MUSIC_VOLUME = 0.56;
+const COMBAT_MUSIC_VOLUME = 0.68;
+const MUSIC_FADE_SECONDS = 4.2;
+const MUSIC_COMBAT_ENTER_RANGE = 7.5;
+const MUSIC_COMBAT_EXIT_RANGE = 9.5;
+const MONSTER_VOICE_COUNT = 11;
+const MONSTER_VOICE_VOLUME = 0.64;
+const MONSTER_VOICE_COOLDOWN = 2.4;
+const STRIKE_SFX_VOLUME_MIN = 0.28;
+const STRIKE_SFX_VOLUME_MAX = 0.74;
+const STRIKE_SFX_MIN_GAP_MS = 85;
+const WEAPON_ATTACK_SFX_VOLUME_MIN = 0.34;
+const WEAPON_ATTACK_SFX_VOLUME_MAX = 0.66;
+const MAGIC_ATTACK_SFX_VOLUME_MIN = 0.38;
+const MAGIC_ATTACK_SFX_VOLUME_MAX = 0.72;
+const REVEAL_SFX_VOLUME_MIN = 0.44;
+const REVEAL_SFX_VOLUME_MAX = 0.78;
+const WOLF_SFX_VOLUME_MIN = 0.22;
+const WOLF_SFX_VOLUME_MAX = 0.42;
+const WOLF_SFX_DELAY_MIN_MS = 18000;
+const WOLF_SFX_DELAY_MAX_MS = 42000;
 const MINIMAP_FRAME_MS = 120;
 const HUD_FRAME_MS = 90;
 const SURFACE_GRASS_DECAL_KEYS = ["surfaceGrass1", "surfaceGrass2", "surfaceGrass3", "surfaceGrass4"];
+const STRIKE_SFX_SOURCES = ["bones1", "bones2", "bones3"].map(name => `assets/sfx/${name}.mp3`);
+const WEAPON_ATTACK_SFX_SOURCES = ["sword1", "sword2", "sword3", "sword4", "sword5"].map(name => `assets/sfx/${name}.mp3`);
+const MAGIC_ATTACK_SFX_SOURCES = ["magic1", "magic2", "magic3", "magic4", "magic5", "magic6", "magic7"].map(name => `assets/sfx/${name}.mp3`);
+const REVEAL_SFX_SOURCES = ["reveal1", "reveal2", "reveal3", "reveal5"].map(name => `assets/sfx/${name}.mp3`);
+const WOLF_SFX_SOURCES = ["wolf1", "wolf2", "wolf3"].map(name => `assets/sfx/${name}.mp3`);
 const OBJECT_COLLISION_RADIUS = 0.46;
 const PROP_COLLISION_RADII = {
   village_old_stone_well: 0.62,
@@ -60,8 +90,31 @@ const PROP_COLLISION_RADII = {
   forest_bramble_arch: 0.54
 };
 const NON_SOLID_PROP_PARTS = ["mushroom", "fern", "roots_patch"];
+const NAV_GRID_STEP = 0.5;
+const NAV_DIRECT_SAMPLE_STEP = 0.18;
+const NAV_REPATH_INTERVAL_MS = 180;
+const NAV_GOAL_REFRESH_DISTANCE = 0.75;
+const NAV_MAX_SEARCH_NODES = 720;
+const NAV_MAX_DISTANCE = 16;
+const NAV_DIRECTION_LOOKAHEAD = 5.5;
+const NAV_STUCK_REPATH_SECONDS = 0.18;
+const entityNavigation = new WeakMap();
+const ENEMY_DENSITY_SCALE = 0.25;
+const LANDMARK_ENEMY_RADIUS = 4.2;
+const LANDMARK_ENEMY_CHANCE = 0.82;
+const DESTRUCTIBLE_PROP_PARTS = ["barrel"];
 
 function makeHero(id, name, x, y, stats, equipment, inventory) {
+  const progression = window.ProgressionSystem?.createHeroProgression({
+    hp: stats.hp,
+    maxHp: stats.hp,
+    mana: stats.mana,
+    maxMana: stats.mana,
+    stamina: stats.stamina,
+    maxStamina: stats.stamina
+  });
+  const knownSkills = window.ProgressionSystem?.starterSkillsForHero({ id }) || ["cleave"];
+  const skillBar = window.ProgressionSystem?.defaultBarForHero({ id }) || ["cleave", "redPotion", null, null, null, null];
   return {
     id,
     name,
@@ -79,6 +132,7 @@ function makeHero(id, name, x, y, stats, equipment, inventory) {
     runes: 0,
     level: 1,
     xp: 0,
+    progression,
     dir: 1,
     walkT: 0,
     attackT: 0,
@@ -86,8 +140,12 @@ function makeHero(id, name, x, y, stats, equipment, inventory) {
     equipment,
     inventory,
     skills: {
-      known: ["cleave", "piercingShot", "firebolt", "frostShard", "lightningArc", "stormChain", "arcaneWard", "bloodHex"],
-      bar: ["cleave", "piercingShot", "firebolt", "frostShard", "lightningArc", "redPotion"]
+      known: knownSkills,
+      ranks: knownSkills.reduce((all, skillId) => {
+        all[skillId] = 1;
+        return all;
+      }, {}),
+      bar: skillBar
     }
   };
 }
@@ -104,12 +162,13 @@ const atlasFiles = {
   cyclops: "cyclops.webp",
   goblinEmperor: "goblinemporer.webp",
   skills: "skills.png",
-  spells: "spells.png"
+  spells: "spells.png",
+  mummyAnimation: "animations/mummy.webp"
 };
 
 const atlasDimensions = {
-  items: { width: ATLAS_SIZE, height: ATLAS_SIZE },
-  weapons: { width: 971, height: 940 },
+  items: { width: ITEM_ATLAS_WIDTH, height: ITEM_ATLAS_HEIGHT },
+  weapons: { width: 640, height: 700 },
   armour: { width: ATLAS_SIZE, height: ATLAS_SIZE },
   ui: { width: ATLAS_SIZE, height: ATLAS_SIZE },
   characters: { width: ATLAS_SIZE, height: ATLAS_SIZE },
@@ -123,6 +182,7 @@ const atlasDimensions = {
 };
 
 const atlasGrids = {
+  items: { cols: 5, rows: 5 },
   weapons: { cols: 5, rows: 5 },
   skills: { cols: 5, rows: 5 },
   spells: { cols: 6, rows: 5 }
@@ -194,8 +254,39 @@ const characterSheetSprites = {
 };
 
 const commonEnemyTypes = ["commonOrc", "commonGoblin", "commonSkeleton", "commonMummy", "commonNecromancer"];
+const animatedActorSprites = {
+  commonMummy: {
+    sheet: "mummyAnimation",
+    cols: 9,
+    rows: 9,
+    playableRows: 8,
+    frameCount: 72,
+    fps: 10,
+    draw: { x: -59, y: -87, h: 118 }
+  }
+};
 const CYCLOPS_SPAWN_MIN_ROLL = 0.93;
 const GOBLIN_EMPEROR_SPAWN_MIN_ROLL = 0.965;
+const RARE_ENEMY_PROFILES = {
+  cyclops: {
+    title: "Ancient",
+    hpMultiplier: 2.35,
+    damageMultiplier: 1.22,
+    xpMultiplier: 1.7,
+    goldMultiplier: 3.2,
+    lootRolls: 3,
+    bonusDrops: ["greenPotion", "redPotion"]
+  },
+  goblinEmperor: {
+    title: "Crowned",
+    hpMultiplier: 3.1,
+    damageMultiplier: 1.34,
+    xpMultiplier: 2.2,
+    goldMultiplier: 4.5,
+    lootRolls: 4,
+    bonusDrops: ["runeShard", "bluePotion", "greenPotion"]
+  }
+};
 
 const images = {};
 const worldAssets = {};
@@ -237,6 +328,20 @@ const terrainAssetFiles = {
   surfaceGrass3: { src: "grass3.webp" },
   surfaceGrass4: { src: "grass4.webp" }
 };
+
+const gameMusic = {
+  ambient: null,
+  combat: null,
+  started: false,
+  trying: false,
+  combatActive: false,
+  combatMix: 0
+};
+
+let lastStrikeSfxAt = 0;
+let nextWolfSfxAt = 0;
+const activeSfx = new Set();
+const recentSfxByGroup = {};
 
 const starterInventory = [
   { id: "redPotion", qty: 3 },
@@ -321,6 +426,7 @@ const skillInfo = {
 };
 
 function spriteCell(sheet, row, column) {
+  if (atlasGrids[sheet]) return gridAtlasCell(sheet, row, column);
   return {
     sheet,
     row,
@@ -364,6 +470,18 @@ function gridAtlasCell(sheet, row, column) {
   };
 }
 
+function normalizeGridSheetSprites(sheet) {
+  if (!atlasGrids[sheet]) return;
+  for (const sprite of Object.values(spriteLookup)) {
+    if (sprite.sheet !== sheet || !Number.isFinite(sprite.row) || !Number.isFinite(sprite.column)) continue;
+    Object.assign(sprite, gridAtlasCell(sheet, sprite.row, sprite.column));
+    if (sheet === "items" || sheet === "weapons") {
+      sprite.iconScaleX = 56 / sprite.width;
+      sprite.iconScaleY = 56 / sprite.height;
+    }
+  }
+}
+
 async function loadAssets() {
   Object.entries(atlasFiles).forEach(([key, src]) => {
     const image = new Image();
@@ -404,11 +522,15 @@ async function loadAssets() {
       spriteLookup[id] = { id, name: id, ...spriteCell(sheet, row, column) };
     }
   }
+  normalizeGridSheetSprites("items");
+  normalizeGridSheetSprites("weapons");
+  const flameSwordCell = gridAtlasCell("weapons", 3, 0);
   spriteLookup.flameSword = {
     id: "flameSword",
     name: "Emberbrand",
-    ...gridAtlasCell("weapons", 3, 0),
-    iconScale: 0.5
+    ...flameSwordCell,
+    iconScaleX: 56 / flameSwordCell.width,
+    iconScaleY: 56 / flameSwordCell.height
   };
   for (const skill of Object.values(skillInfo)) {
     spriteLookup[skill.icon] = {
@@ -485,6 +607,7 @@ function setActiveHero(id) {
   });
   renderHud();
   renderInventory();
+  renderProgression();
   toast(`${activeHero().name} selected.`);
 }
 
@@ -530,6 +653,18 @@ function chunkKey(cx, cy) {
 
 function worldEditKey(prefix, id) {
   return `${prefix}:${id}`;
+}
+
+function propWorldId(propId, x, y) {
+  return `${propId}-${Math.floor(x)}-${Math.floor(y)}`;
+}
+
+function isDestructiblePropId(propId) {
+  return Boolean(propId) && DESTRUCTIBLE_PROP_PARTS.some(part => propId.includes(part));
+}
+
+function isDestroyedProp(propId, x, y) {
+  return isDestructiblePropId(propId) && Boolean(state.worldEdits[worldEditKey("prop", propWorldId(propId, x, y))]?.dead);
 }
 
 function getBiome(x, y) {
@@ -630,13 +765,7 @@ function seedChunkEntities(chunk) {
       { id: "merchant", name: "Merchant", sprite: "merchant", x: 17, y: 12, lines: ["Gold has a memory. Spend it well.", "I saw a crossbow buried near the old water stairs."] },
       { id: "blacksmith", name: "Blacksmith", sprite: "blacksmith", x: 16.5, y: 10.8, lines: ["Blades chip. Armor lies. Boots tell the truth.", "Bring runes and I will wake the metal."] }
     );
-    chunk.enemies.push(
-      enemy("skeleton", "Skeleton", 4, 12, 56, 8, "coinStack"),
-      enemy("skeleton", "Skeleton", 7, 16, 56, 8, "redPotion"),
-      enemy("emberImp", "Ember Imp", 15, 15, 44, 10, "fireOrb"),
-      enemy("frostAcolyte", "Frost Acolyte", 7, 8, 72, 13, "staff"),
-      enemy("cultist", "Cultist", 20, 14, 68, 12, "runeShard")
-    );
+    addEnemyClusterAroundLandmark(chunk, chunk.buildings[0], "ruins", WORLD_SEED + 5, 2);
   }
 
   const centerX = cx * CHUNK_SIZE + 8;
@@ -648,12 +777,16 @@ function seedChunkEntities(chunk) {
     const assets = biome === "ruins"
       ? ["building_ruined_chapel_wall", "building_collapsed_barn", "building_ruined_village_gate_arch"]
       : ["building_small_hunter_cabin", "village_gloomy_woodland_hut", "building_ruined_blacksmith_shed"];
-    chunk.buildings.push({ id: `building-${cx}-${cy}`, name: biome === "ruins" ? "Village Ruin" : "Woodland Shelter", x: centerX - 1.5, y: centerY - 1.5, w: 3, h: 3, open: true, biomeAsset: assets[Math.floor(roll * assets.length) % assets.length] });
+    const landmark = { id: `building-${cx}-${cy}`, name: biome === "ruins" ? "Village Ruin" : "Woodland Shelter", x: centerX - 1.5, y: centerY - 1.5, w: 3, h: 3, open: true, biomeAsset: assets[Math.floor(roll * assets.length) % assets.length] };
+    chunk.buildings.push(landmark);
+    if (hash2(cx, cy, WORLD_SEED + 211) < LANDMARK_ENEMY_CHANCE) {
+      addEnemyClusterAroundLandmark(chunk, landmark, biome, WORLD_SEED + 217, 3);
+    }
   }
   if (distFromSpawn > 8) {
     const commonRoll = hash2(cx, cy, WORLD_SEED + 97);
-    if (commonRoll > 0.22) {
-      const count = 2 + Math.floor(hash2(cx, cy, WORLD_SEED + 98) * 7);
+    if (commonRoll > 0.35) {
+      const count = Math.max(1, Math.floor((2 + Math.floor(hash2(cx, cy, WORLD_SEED + 98) * 7)) * ENEMY_DENSITY_SCALE));
       for (let i = 0; i < count; i++) {
         const type = commonEnemyTypes[(i + Math.floor(commonRoll * 100)) % commonEnemyTypes.length];
         const spread = hash2(cx + i, cy, WORLD_SEED + 99) * Math.PI * 2;
@@ -683,7 +816,8 @@ function seedChunkEntities(chunk) {
         centerY + Math.sin(spread) * radius,
         156,
         23,
-        cyclopsRoll > 0.985 ? "runeShard" : "coinStack"
+        cyclopsRoll > 0.985 ? "runeShard" : "coinStack",
+        rareEnemyOptions("cyclops", cyclopsRoll)
       ));
     }
   }
@@ -699,13 +833,14 @@ function seedChunkEntities(chunk) {
         centerY + Math.sin(spread) * radius,
         196,
         28,
-        emperorRoll > 0.99 ? "runeShard" : "coinStack"
+        emperorRoll > 0.99 ? "runeShard" : "coinStack",
+        rareEnemyOptions("goblinEmperor", emperorRoll)
       ));
     }
   }
-  if (distFromSpawn > 8 && roll > 0.82) {
+  if (distFromSpawn > 8 && roll > 0.95) {
     const enemyType = biome === "marsh" ? ["swampHag", "beastWolf"] : biome === "ruins" ? ["skeleton", "cultist"] : ["goblinRaider", "beastWolf", "emberImp"];
-    const count = roll > 0.82 ? 3 : 2;
+    const count = 1;
     for (let i = 0; i < count; i++) {
       const type = enemyType[(i + Math.floor(roll * 10)) % enemyType.length];
       chunk.enemies.push(enemy(type, enemyName(type), centerX + i * 1.6 - 1.2, centerY + hash2(cx + i, cy, WORLD_SEED + 53) * 4 - 2, type === "beastWolf" ? 52 : 64, 9 + i * 2, roll > 0.75 ? "coinStack" : "redPotion"));
@@ -774,6 +909,47 @@ function visibleTileBounds(pad = 4, corners = null) {
   };
 }
 
+function addEnemyClusterAroundLandmark(chunk, landmark, biome, seed, maxCount = 3) {
+  if (!landmark) return;
+  const roll = hash2(Math.floor(landmark.x), Math.floor(landmark.y), seed);
+  const pool = landmark.id === "temple"
+    ? ["skeleton", "frostAcolyte", "cultist"]
+    : biome === "marsh"
+      ? ["swampHag", "beastWolf"]
+      : biome === "ruins"
+        ? ["skeleton", "cultist", "commonMummy"]
+        : ["goblinRaider", "beastWolf", "emberImp"];
+  const count = Math.max(1, Math.min(maxCount, Math.round((2 + roll * 4) * ENEMY_DENSITY_SCALE)));
+  const cx = landmark.x + landmark.w / 2;
+  const cy = landmark.y + landmark.h / 2;
+
+  for (let i = 0; i < count; i++) {
+    const type = pool[(i + Math.floor(roll * 100)) % pool.length];
+    const angle = hash2(cx + i, cy - i, seed + 13) * Math.PI * 2;
+    const radius = 1.9 + hash2(cx - i, cy + i, seed + 17) * LANDMARK_ENEMY_RADIUS;
+    const stats = commonEnemyStats(type);
+    const ex = cx + Math.cos(angle) * radius;
+    const ey = cy + Math.sin(angle) * radius;
+    if (spawnPointBlockedBySeed(ex, ey, landmark)) continue;
+    chunk.enemies.push(enemy(
+      type,
+      enemyName(type),
+      ex,
+      ey,
+      stats.hp,
+      stats.damage,
+      roll > 0.66 ? "coinStack" : "redPotion"
+    ));
+  }
+}
+
+function spawnPointBlockedBySeed(x, y, landmark = null) {
+  const tile = tileFromSeed(Math.floor(x), Math.floor(y));
+  if (!tile || tile.water) return true;
+  if (landmark && x >= landmark.x && y >= landmark.y && x < landmark.x + landmark.w && y < landmark.y + landmark.h) return true;
+  return false;
+}
+
 function enemyName(type) {
   return {
     commonOrc: "Orc Brute",
@@ -808,19 +984,42 @@ function buildWorld() {
   refreshActiveWorld();
 }
 
-function enemy(sprite, name, x, y, hp, damage, drop) {
+function rareEnemyOptions(sprite, roll = 0) {
+  const profile = RARE_ENEMY_PROFILES[sprite];
+  if (!profile) return {};
+  const exalted = roll > 0.992;
+  return {
+    rarity: exalted ? "legendary" : "rare",
+    title: exalted ? "Exalted" : profile.title,
+    hpMultiplier: profile.hpMultiplier * (exalted ? 1.22 : 1),
+    damageMultiplier: profile.damageMultiplier * (exalted ? 1.12 : 1),
+    xpMultiplier: profile.xpMultiplier * (exalted ? 1.25 : 1),
+    goldMultiplier: profile.goldMultiplier * (exalted ? 1.35 : 1),
+    lootRolls: profile.lootRolls + (exalted ? 1 : 0),
+    bonusDrops: profile.bonusDrops
+  };
+}
+
+function enemy(sprite, name, x, y, hp, damage, drop, options = {}) {
   const caster = enemySpellProfile(sprite);
   const melee = enemyMeleeProfile(sprite);
+  const maxHp = Math.round(hp * (options.hpMultiplier || 1));
+  const finalDamage = Math.round(damage * (options.damageMultiplier || 1));
   return {
     id: `${sprite}-${x}-${y}`,
     sprite,
-    name,
+    name: options.title ? `${options.title} ${name}` : name,
     x,
     y,
-    hp,
-    maxHp: hp,
-    damage,
+    hp: maxHp,
+    maxHp,
+    damage: finalDamage,
     drop,
+    rarity: options.rarity || "common",
+    lootRolls: options.lootRolls || 1,
+    goldMultiplier: options.goldMultiplier || 1,
+    xpMultiplier: options.xpMultiplier || 1,
+    bonusDrops: options.bonusDrops || [],
     speed: caster?.speed || melee?.speed || (sprite === "frostAcolyte" ? 1.15 : 1.45),
     aggro: caster?.aggro || melee?.aggro || (sprite === "frostAcolyte" ? 6 : 5),
     attackRange: caster?.range || melee?.attackRange || (sprite === "frostAcolyte" ? 3.8 : 1.25),
@@ -829,7 +1028,12 @@ function enemy(sprite, name, x, y, hp, damage, drop) {
     cooldown: 0,
     dir: 1,
     walkT: 0,
+    animT: 0,
     attackT: 0,
+    voiceSrc: monsterVoicePath(sprite, x, y),
+    voiceAudio: null,
+    voiceReadyAt: 0,
+    voiceAlerted: false,
     dead: false
   };
 }
@@ -914,14 +1118,10 @@ function normalizeCamera() {
 
 function normalizeHeroSkills() {
   for (const hero of state.heroes) {
-    hero.skills ||= {};
-    hero.skills.known = Array.isArray(hero.skills.known) && hero.skills.known.length ? hero.skills.known : [...DEFAULT_KNOWN_SKILLS];
-    hero.skills.bar = Array.isArray(hero.skills.bar) && hero.skills.bar.length ? hero.skills.bar : [...DEFAULT_SKILL_BAR];
-    while (hero.skills.bar.length < 6) hero.skills.bar.push(null);
-    hero.skills.bar = hero.skills.bar.slice(0, 6);
+    window.ProgressionSystem?.normalizeHero(hero, skillInfo);
   }
   const hero = activeHero();
-  if (!skillInfo[state.mode] || !hero.skills.bar.includes(state.mode)) {
+  if (!skillInfo[state.mode] || !hero.skills.known.includes(state.mode)) {
     state.mode = hero.skills.bar.find(id => skillInfo[id]) || "cleave";
   }
 }
@@ -1114,6 +1314,7 @@ function propBlocksPosition(x, y) {
     for (let px = tx - 1; px <= tx + 1; px++) {
       const tile = getTile(px, py);
       if (!tile?.prop || tile.water) continue;
+      if (isDestroyedProp(tile.prop, px, py)) continue;
       const radius = propCollisionRadius(tile.prop);
       if (radius <= 0) continue;
       if (Math.hypot(x - px, y - py) < radius) return true;
@@ -1130,14 +1331,283 @@ function propCollisionRadius(propId) {
   return OBJECT_COLLISION_RADIUS;
 }
 
-function moveEntityWithCollision(entity, nx, ny) {
+function collisionMoveEntity(entity, nx, ny) {
+  const ox = entity.x;
+  const oy = entity.y;
   if (!tileBlocked(nx, entity.y)) entity.x = nx;
   if (!tileBlocked(entity.x, ny)) entity.y = ny;
+  return Math.hypot(entity.x - ox, entity.y - oy);
+}
+
+function moveEntityWithCollision(entity, nx, ny) {
+  return collisionMoveEntity(entity, nx, ny);
+}
+
+function navigationForEntity(entity) {
+  let nav = entityNavigation.get(entity);
+  if (!nav) {
+    nav = { path: [], index: 0, goalX: null, goalY: null, plannedAt: 0, stuckT: 0 };
+    entityNavigation.set(entity, nav);
+  }
+  return nav;
+}
+
+function clearEntityNavigation(entity) {
+  const nav = entityNavigation.get(entity);
+  if (!nav) return;
+  nav.path = [];
+  nav.index = 0;
+  nav.goalX = null;
+  nav.goalY = null;
+  nav.stuckT = 0;
+}
+
+function navigationCell(value) {
+  return Math.round(value / NAV_GRID_STEP);
+}
+
+function navigationWorld(cell) {
+  return cell * NAV_GRID_STEP;
+}
+
+function navigationCellKey(x, y) {
+  return `${x},${y}`;
+}
+
+function navigationCellBlocked(x, y) {
+  return tileBlocked(navigationWorld(x), navigationWorld(y));
+}
+
+function nearestOpenNavigationCell(x, y, radius = 8) {
+  if (!navigationCellBlocked(x, y)) return { x, y };
+  for (let r = 1; r <= radius; r++) {
+    let best = null;
+    let bestD = Infinity;
+    for (let cy = y - r; cy <= y + r; cy++) {
+      for (let cx = x - r; cx <= x + r; cx++) {
+        if (Math.abs(cx - x) !== r && Math.abs(cy - y) !== r) continue;
+        if (navigationCellBlocked(cx, cy)) continue;
+        const d = Math.hypot(cx - x, cy - y);
+        if (d < bestD) {
+          bestD = d;
+          best = { x: cx, y: cy };
+        }
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
+function hasDirectNavigationLine(ax, ay, bx, by) {
+  const dist = Math.hypot(bx - ax, by - ay);
+  const samples = Math.max(1, Math.ceil(dist / NAV_DIRECT_SAMPLE_STEP));
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    if (tileBlocked(ax + (bx - ax) * t, ay + (by - ay) * t)) return false;
+  }
+  return true;
+}
+
+function reconstructNavigationPath(node) {
+  const path = [];
+  let current = node;
+  while (current) {
+    path.push({ x: navigationWorld(current.x), y: navigationWorld(current.y) });
+    current = current.parent;
+  }
+  path.reverse();
+  return simplifyNavigationPath(path);
+}
+
+function simplifyNavigationPath(path) {
+  if (path.length <= 2) return path;
+  const simplified = [path[0]];
+  let anchor = 0;
+  while (anchor < path.length - 1) {
+    let next = anchor + 1;
+    for (let i = path.length - 1; i > anchor + 1; i--) {
+      if (hasDirectNavigationLine(path[anchor].x, path[anchor].y, path[i].x, path[i].y)) {
+        next = i;
+        break;
+      }
+    }
+    simplified.push(path[next]);
+    anchor = next;
+  }
+  return simplified;
+}
+
+function findNavigationPath(sx, sy, gx, gy, maxDistance = NAV_MAX_DISTANCE) {
+  const start = nearestOpenNavigationCell(navigationCell(sx), navigationCell(sy), 6);
+  if (!start) return null;
+
+  let goalX = gx;
+  let goalY = gy;
+  const goalDistance = Math.hypot(goalX - sx, goalY - sy);
+  if (goalDistance > maxDistance) {
+    const scale = maxDistance / goalDistance;
+    goalX = sx + (goalX - sx) * scale;
+    goalY = sy + (goalY - sy) * scale;
+  }
+
+  const goal = nearestOpenNavigationCell(navigationCell(goalX), navigationCell(goalY), 10);
+  if (!goal) return null;
+
+  const startKey = navigationCellKey(start.x, start.y);
+  const goalKey = navigationCellKey(goal.x, goal.y);
+  const open = [];
+  const nodes = new Map();
+  const startNode = { x: start.x, y: start.y, g: 0, h: Math.hypot(goal.x - start.x, goal.y - start.y), parent: null };
+  startNode.f = startNode.h;
+  open.push(startNode);
+  nodes.set(startKey, startNode);
+
+  const dirs = [
+    [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+    [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2]
+  ];
+  let visited = 0;
+  let closest = startNode;
+
+  while (open.length && visited < NAV_MAX_SEARCH_NODES) {
+    let bestIndex = 0;
+    for (let i = 1; i < open.length; i++) {
+      if (open[i].f < open[bestIndex].f) bestIndex = i;
+    }
+    const current = open.splice(bestIndex, 1)[0];
+    if (current.closed) continue;
+    current.closed = true;
+    visited++;
+
+    if (current.h < closest.h) closest = current;
+    if (navigationCellKey(current.x, current.y) === goalKey) return reconstructNavigationPath(current);
+
+    for (const [dx, dy, cost] of dirs) {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      if (Math.hypot(nx - start.x, ny - start.y) * NAV_GRID_STEP > maxDistance) continue;
+      if (navigationCellBlocked(nx, ny)) continue;
+      if (dx && dy && (navigationCellBlocked(current.x + dx, current.y) || navigationCellBlocked(current.x, current.y + dy))) continue;
+      const key = navigationCellKey(nx, ny);
+      const nextG = current.g + cost;
+      let node = nodes.get(key);
+      if (!node) {
+        node = { x: nx, y: ny, g: nextG, h: Math.hypot(goal.x - nx, goal.y - ny), parent: current };
+        node.f = node.g + node.h;
+        nodes.set(key, node);
+        open.push(node);
+      } else if (!node.closed && nextG < node.g) {
+        node.g = nextG;
+        node.f = nextG + node.h;
+        node.parent = current;
+      }
+    }
+  }
+
+  return closest !== startNode ? reconstructNavigationPath(closest) : null;
+}
+
+function shouldRefreshNavigation(nav, tx, ty) {
+  const now = performance.now();
+  if (!nav.path.length) return true;
+  if (now - nav.plannedAt > NAV_REPATH_INTERVAL_MS && Math.hypot(tx - nav.goalX, ty - nav.goalY) > NAV_GOAL_REFRESH_DISTANCE) return true;
+  if (nav.stuckT > NAV_STUCK_REPATH_SECONDS && now - nav.plannedAt > NAV_REPATH_INTERVAL_MS) return true;
+  return false;
+}
+
+function setNavigationPath(nav, path, tx, ty) {
+  nav.path = path || [];
+  nav.index = nav.path.length > 1 ? 1 : 0;
+  nav.goalX = tx;
+  nav.goalY = ty;
+  nav.plannedAt = performance.now();
+  nav.stuckT = 0;
+}
+
+function steerAroundObstacle(entity, dx, dy, maxStep) {
+  const len = Math.hypot(dx, dy);
+  if (!len) return 0;
+  const ux = dx / len;
+  const uy = dy / len;
+  const candidates = [0, 0.45, -0.45, 0.85, -0.85, 1.35, -1.35, Math.PI];
+  let best = null;
+  let bestScore = -Infinity;
+  for (const angle of candidates) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const vx = ux * cos - uy * sin;
+    const vy = ux * sin + uy * cos;
+    const tx = entity.x + vx * maxStep;
+    const ty = entity.y + vy * maxStep;
+    if (tileBlocked(tx, ty)) continue;
+    const score = vx * ux + vy * uy;
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x: tx, y: ty };
+    }
+  }
+  return best ? collisionMoveEntity(entity, best.x, best.y) : 0;
+}
+
+function moveEntityToward(entity, tx, ty, maxStep, options = {}) {
+  if (!entity || maxStep <= 0) return 0;
+  const arriveDistance = options.arriveDistance || 0.08;
+  const dist = Math.hypot(tx - entity.x, ty - entity.y);
+  if (dist <= arriveDistance) {
+    clearEntityNavigation(entity);
+    return 0;
+  }
+
+  const nav = navigationForEntity(entity);
+  if (hasDirectNavigationLine(entity.x, entity.y, tx, ty)) {
+    clearEntityNavigation(entity);
+    const step = Math.min(maxStep, Math.max(0, dist - arriveDistance));
+    return collisionMoveEntity(entity, entity.x + (tx - entity.x) / dist * step, entity.y + (ty - entity.y) / dist * step);
+  }
+
+  if (shouldRefreshNavigation(nav, tx, ty)) {
+    setNavigationPath(nav, findNavigationPath(entity.x, entity.y, tx, ty, options.maxDistance || NAV_MAX_DISTANCE), tx, ty);
+  }
+
+  while (nav.index < nav.path.length && Math.hypot(nav.path[nav.index].x - entity.x, nav.path[nav.index].y - entity.y) < 0.18) {
+    nav.index++;
+  }
+
+  let waypoint = nav.path[nav.index];
+  if (!waypoint && performance.now() - nav.plannedAt > NAV_REPATH_INTERVAL_MS) {
+    setNavigationPath(nav, findNavigationPath(entity.x, entity.y, tx, ty, options.maxDistance || NAV_MAX_DISTANCE), tx, ty);
+    waypoint = nav.path[nav.index];
+  }
+  if (!waypoint) {
+    const moved = steerAroundObstacle(entity, tx - entity.x, ty - entity.y, maxStep);
+    nav.stuckT = moved < 0.01 ? nav.stuckT + 1 / 60 : 0;
+    return moved;
+  }
+
+  const wdist = Math.hypot(waypoint.x - entity.x, waypoint.y - entity.y);
+  const step = Math.min(maxStep, wdist);
+  const moved = collisionMoveEntity(entity, entity.x + (waypoint.x - entity.x) / wdist * step, entity.y + (waypoint.y - entity.y) / wdist * step);
+  nav.stuckT = moved < 0.01 ? nav.stuckT + 1 / 60 : 0;
+  return moved;
+}
+
+function moveEntityInDirection(entity, dx, dy, maxStep, options = {}) {
+  const len = Math.hypot(dx, dy);
+  if (!len) {
+    clearEntityNavigation(entity);
+    return 0;
+  }
+  const ux = dx / len;
+  const uy = dy / len;
+  const lookahead = options.lookahead || NAV_DIRECTION_LOOKAHEAD;
+  return moveEntityToward(entity, entity.x + ux * lookahead, entity.y + uy * lookahead, maxStep, { maxDistance: lookahead + 3 });
 }
 
 function update(dt) {
   refreshActiveWorld();
   const player = activeHero();
+  const playerStats = window.ProgressionSystem?.derivedStats(player) || { moveSpeed: 2.8, sprintSpeed: 4.4, sprintCost: 18, staminaRegen: 14 };
   let dx = 0;
   let dy = 0;
   if (state.keys.has("w")) dy -= 1;
@@ -1149,15 +1619,15 @@ function update(dt) {
     const len = Math.hypot(dx, dy);
     dx /= len;
     dy /= len;
-    const speed = (state.keys.has("shift") && player.stamina > 2 ? 4.4 : 2.8) * dt;
-    if (state.keys.has("shift")) player.stamina = Math.max(0, player.stamina - 18 * dt);
-    const nx = player.x + dx * speed;
-    const ny = player.y + dy * speed;
-    moveEntityWithCollision(player, nx, ny);
+    const sprinting = state.keys.has("shift") && player.stamina > 2;
+    const speed = (sprinting ? playerStats.sprintSpeed : playerStats.moveSpeed) * dt;
+    if (sprinting) player.stamina = Math.max(0, player.stamina - playerStats.sprintCost * dt);
+    moveEntityInDirection(player, dx, dy, speed, { lookahead: sprinting ? 6.5 : NAV_DIRECTION_LOOKAHEAD });
     player.dir = dx >= 0 ? 1 : -1;
     player.walkT += dt * 9;
   } else {
-    player.stamina = Math.min(player.maxStamina, player.stamina + 14 * dt);
+    clearEntityNavigation(player);
+    player.stamina = Math.min(player.maxStamina, player.stamina + playerStats.staminaRegen * dt);
   }
 
   player.attackT = Math.max(0, player.attackT - dt);
@@ -1167,6 +1637,7 @@ function update(dt) {
   updateAnimals(dt);
 
   updateEnemies(dt);
+  updateGameMusic(dt);
   updateProjectiles(dt);
   updateSpellEffects(dt);
   updateParticles(dt);
@@ -1181,6 +1652,171 @@ function update(dt) {
     renderHud();
     lastHudRender = now;
   }
+}
+
+function createLoopingTrack(src, volume = 0) {
+  const track = new Audio(src);
+  track.loop = true;
+  track.preload = "auto";
+  track.volume = volume;
+  return track;
+}
+
+function initGameMusic() {
+  if (gameMusic.ambient && gameMusic.combat) return;
+  gameMusic.ambient = createLoopingTrack(AMBIENT_MUSIC_SRC, 0);
+  gameMusic.combat = createLoopingTrack(COMBAT_MUSIC_SRC, 0);
+}
+
+function requestGameMusicStart() {
+  initGameMusic();
+  if (gameMusic.started || gameMusic.trying) return;
+  gameMusic.trying = true;
+  Promise.all([
+    gameMusic.ambient.play(),
+    gameMusic.combat.play()
+  ]).then(() => {
+    gameMusic.started = true;
+    gameMusic.trying = false;
+  }).catch(() => {
+    gameMusic.trying = false;
+  });
+}
+
+function hasNearbyCombatPressure() {
+  const heroes = state.heroes.filter(hero => hero.hp > 0);
+  if (!heroes.length) return false;
+
+  const activeRange = gameMusic.combatMix > 0.02 ? MUSIC_COMBAT_EXIT_RANGE : MUSIC_COMBAT_ENTER_RANGE;
+  return state.enemies.some(enemyState => {
+    if (enemyState.dead || enemyState.hp <= 0) return false;
+    return heroes.some(hero => distance(enemyState, hero) <= activeRange);
+  });
+}
+
+function updateGameMusic(dt) {
+  if (!gameMusic.ambient || !gameMusic.combat) return;
+
+  const combatActive = hasNearbyCombatPressure();
+  if (combatActive && !gameMusic.combatActive) {
+    gameMusic.combat.currentTime = 0;
+  }
+  gameMusic.combatActive = combatActive;
+
+  const targetMix = combatActive ? 1 : 0;
+  const step = dt / MUSIC_FADE_SECONDS;
+  if (gameMusic.combatMix < targetMix) {
+    gameMusic.combatMix = Math.min(targetMix, gameMusic.combatMix + step);
+  } else if (gameMusic.combatMix > targetMix) {
+    gameMusic.combatMix = Math.max(targetMix, gameMusic.combatMix - step);
+  }
+
+  gameMusic.ambient.volume = clamp((1 - gameMusic.combatMix) * AMBIENT_MUSIC_VOLUME, 0, 1);
+  gameMusic.combat.volume = clamp(gameMusic.combatMix * COMBAT_MUSIC_VOLUME, 0, 1);
+  updateAmbientWolfSfx(combatActive);
+}
+
+function playOneShotSfx(src, volume = 1, playbackRate = 1) {
+  const clip = new Audio(src);
+  clip.volume = clamp(volume, 0, 1);
+  clip.playbackRate = clamp(playbackRate, 0.7, 1.35);
+  clip.preload = "auto";
+  activeSfx.add(clip);
+  const cleanup = () => {
+    activeSfx.delete(clip);
+    clip.remove();
+  };
+  clip.addEventListener("ended", cleanup, { once: true });
+  clip.addEventListener("error", cleanup, { once: true });
+  clip.play().catch(cleanup);
+  return clip;
+}
+
+function pickVariedSfx(sources, group) {
+  if (!sources.length) return null;
+  let src = sources[Math.floor(Math.random() * sources.length)];
+  if (sources.length > 1 && src === recentSfxByGroup[group]) {
+    const alternatives = sources.filter(candidate => candidate !== src);
+    src = alternatives[Math.floor(Math.random() * alternatives.length)];
+  }
+  recentSfxByGroup[group] = src;
+  return src;
+}
+
+function playVariedSfx(sources, group, minVolume, maxVolume, minRate = 0.96, maxRate = 1.05) {
+  const src = pickVariedSfx(sources, group);
+  if (!src) return null;
+  const volume = minVolume + Math.random() * (maxVolume - minVolume);
+  const playbackRate = minRate + Math.random() * (maxRate - minRate);
+  return playOneShotSfx(src, volume, playbackRate);
+}
+
+function randomWolfSfxDelay() {
+  return WOLF_SFX_DELAY_MIN_MS + Math.random() * (WOLF_SFX_DELAY_MAX_MS - WOLF_SFX_DELAY_MIN_MS);
+}
+
+function updateAmbientWolfSfx(combatActive) {
+  if (!gameMusic.started) return;
+
+  const now = performance.now();
+  if (combatActive || gameMusic.combatMix > 0.01) {
+    nextWolfSfxAt = now + randomWolfSfxDelay();
+    return;
+  }
+
+  if (!nextWolfSfxAt) nextWolfSfxAt = now + randomWolfSfxDelay();
+  if (now < nextWolfSfxAt) return;
+
+  playVariedSfx(WOLF_SFX_SOURCES, "wolf", WOLF_SFX_VOLUME_MIN, WOLF_SFX_VOLUME_MAX, 0.96, 1.04);
+  nextWolfSfxAt = now + randomWolfSfxDelay();
+}
+
+function playStrikeSfx() {
+  const now = performance.now();
+  if (now - lastStrikeSfxAt < STRIKE_SFX_MIN_GAP_MS) return;
+  lastStrikeSfxAt = now;
+
+  playVariedSfx(STRIKE_SFX_SOURCES, "strike", STRIKE_SFX_VOLUME_MIN, STRIKE_SFX_VOLUME_MAX, 0.95, 1.08);
+}
+
+function playWeaponAttackSfx() {
+  playVariedSfx(WEAPON_ATTACK_SFX_SOURCES, "weapon", WEAPON_ATTACK_SFX_VOLUME_MIN, WEAPON_ATTACK_SFX_VOLUME_MAX, 0.93, 1.08);
+}
+
+function playMagicAttackSfx() {
+  playVariedSfx(MAGIC_ATTACK_SFX_SOURCES, "magic", MAGIC_ATTACK_SFX_VOLUME_MIN, MAGIC_ATTACK_SFX_VOLUME_MAX, 0.92, 1.08);
+}
+
+function playRevealSfx() {
+  playVariedSfx(REVEAL_SFX_SOURCES, "reveal", REVEAL_SFX_VOLUME_MIN, REVEAL_SFX_VOLUME_MAX, 0.96, 1.05);
+}
+
+function monsterVoicePath(sprite, x, y) {
+  const roll = hash2(Math.floor(x * 17), Math.floor(y * 19), WORLD_SEED + sprite.length);
+  const voiceIndex = 1 + Math.floor(roll * MONSTER_VOICE_COUNT);
+  return `assets/sfx/monster${voiceIndex}.mp3`;
+}
+
+function playMonsterVoice(enemyState, chance = 1) {
+  if (!enemyState || enemyState.kind === "animal" || enemyState.dead || Math.random() > chance) return;
+  const now = performance.now();
+  if (now < (enemyState.voiceReadyAt || 0)) return;
+  enemyState.voiceReadyAt = now + MONSTER_VOICE_COOLDOWN * 1000;
+
+  stopMonsterVoice(enemyState);
+  enemyState.voiceAudio = playOneShotSfx(enemyState.voiceSrc, MONSTER_VOICE_VOLUME);
+  enemyState.voiceAudio.addEventListener("ended", () => {
+    if (enemyState.voiceAudio?.ended) enemyState.voiceAudio = null;
+  }, { once: true });
+}
+
+function stopMonsterVoice(enemyState) {
+  if (!enemyState?.voiceAudio) return;
+  enemyState.voiceAudio.pause();
+  enemyState.voiceAudio.removeAttribute("src");
+  enemyState.voiceAudio.load();
+  activeSfx.delete(enemyState.voiceAudio);
+  enemyState.voiceAudio = null;
 }
 
 function updatePartyFollowers(dt) {
@@ -1200,13 +1836,14 @@ function updatePartyFollowers(dt) {
     if (dist > 9) {
       hero.x = tx;
       hero.y = ty;
+      clearEntityNavigation(hero);
     } else if (dist > 1.15) {
       const speed = 2.55 * dt;
-      const nx = hero.x + (tx - hero.x) / dist * speed;
-      const ny = hero.y + (ty - hero.y) / dist * speed;
-      moveEntityWithCollision(hero, nx, ny);
+      moveEntityToward(hero, tx, ty, speed, { arriveDistance: 0.35, maxDistance: 8 });
       hero.dir = tx >= hero.x ? 1 : -1;
       hero.walkT += dt * 8;
+    } else {
+      clearEntityNavigation(hero);
     }
   }
 }
@@ -1219,11 +1856,11 @@ function updateAnimals(dt) {
     if (dist < 4) {
       const dx = (animal.x - hero.x) / Math.max(0.1, dist);
       const dy = (animal.y - hero.y) / Math.max(0.1, dist);
-      const nx = animal.x + dx * dt * 1.4;
-      const ny = animal.y + dy * dt * 1.4;
-      moveEntityWithCollision(animal, nx, ny);
+      moveEntityInDirection(animal, dx, dy, dt * 1.4, { lookahead: 3 });
       animal.walkT += dt * 5;
       animal.dir = dx >= 0 ? 1 : -1;
+    } else {
+      clearEntityNavigation(animal);
     }
   }
 }
@@ -1231,32 +1868,46 @@ function updateAnimals(dt) {
 function updateEnemies(dt) {
   for (const e of state.enemies) {
     if (e.dead) continue;
+    e.moving = false;
+    e.alertT = Math.max(0, (e.alertT || 0) - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
     e.attackT = Math.max(0, e.attackT - dt);
     const targetHero = nearestHero(e);
     const dist = distance(e, targetHero);
-    if (dist <= e.aggro || dist <= e.attackRange) {
+    const isAlerted = e.alertT > 0 || dist < e.aggro;
+    if (isAlerted && !e.voiceAlerted) {
+      e.voiceAlerted = true;
+      playMonsterVoice(e, 0.86);
+    } else if (dist > MUSIC_COMBAT_EXIT_RANGE) {
+      e.voiceAlerted = false;
+    }
+    if (isAlerted || dist <= e.attackRange) {
       e.dir = targetHero.x >= e.x ? 1 : -1;
     }
-    if (dist < e.aggro && dist > e.attackRange) {
-      const dx = (targetHero.x - e.x) / dist;
-      const dy = (targetHero.y - e.y) / dist;
-      const nx = e.x + dx * e.speed * dt;
-      const ny = e.y + dy * e.speed * dt;
-      moveEntityWithCollision(e, nx, ny);
+    if (isAlerted && dist > e.attackRange) {
+      moveEntityToward(e, targetHero.x, targetHero.y, e.speed * dt, { arriveDistance: Math.max(0.55, e.attackRange * 0.72), maxDistance: Math.max(8, e.aggro + 4) });
       e.walkT += dt * 8;
+      e.animT = (e.animT || 0) + dt;
+      e.moving = true;
+    } else {
+      clearEntityNavigation(e);
     }
     if (e.spellKind && e.spellKind !== "frostShard" && dist <= e.attackRange && e.cooldown <= 0) {
       const spec = skillInfo[e.spellKind];
       e.cooldown = e.spellKind === "stormChain" ? 2.8 : 2.1;
       e.attackT = 0.55;
+      playMonsterVoice(e, 0.72);
+      playMagicAttackSfx();
       const targets = e.spellKind === "stormChain" ? nearestHeroes(e, spec.maxTargets || 3, spec.range) : [targetHero];
       startSpellEffect(e, targets, spec, { hostile: true });
     } else if (dist <= e.attackRange && e.cooldown <= 0) {
       e.cooldown = e.attackCooldown || (e.sprite === "frostAcolyte" ? 1.35 : 1.05);
       e.attackT = 0.35;
-      damageHero(targetHero, e.damage, e);
-      addFloating(`-${e.damage}`, targetHero.x, targetHero.y, "#ff9b7b");
+      playMonsterVoice(e, 0.72);
+      if (e.spellKind) playMagicAttackSfx();
+      else playWeaponAttackSfx();
+      const dealt = damageHero(targetHero, e.damage, e);
+      addFloating(`-${dealt}`, targetHero.x, targetHero.y, "#ff9b7b");
       burst(targetHero.x, targetHero.y, e.sprite === "frostAcolyte" ? "#79d7ff" : "#e14527", 10);
     }
   }
@@ -1294,7 +1945,7 @@ function updateProjectiles(dt) {
   state.projectiles = state.projectiles.filter(p => {
     p.t += dt * p.speed;
     if (p.t >= 1) {
-      hitEnemy(p.target, p.damage, p.kind);
+      hitTarget(p.target, p.damage, p.kind, p.caster);
       burst(p.target.x, p.target.y, p.color || "#e8c276", 18);
       return false;
     }
@@ -1334,10 +1985,10 @@ function updateSpellEffects(dt) {
       effect.tick = effect.tickRate;
       for (const target of effect.targets) {
         if (effect.hostile) {
-          damageHero(target, effect.damage, { spellKind: effect.kind });
-          addFloating(`-${effect.damage}`, target.x, target.y, effect.secondaryColor);
+          const dealt = damageHero(target, effect.damage, { spellKind: effect.kind });
+          addFloating(`-${dealt}`, target.x, target.y, effect.secondaryColor);
         } else {
-          hitEnemy(target, effect.damage, effect.kind);
+          hitTarget(target, effect.damage, effect.kind, effect.caster);
         }
         magicBurst(target.x, target.y, effect.secondaryColor, 10);
       }
@@ -1396,20 +2047,23 @@ function updateBlood(dt) {
 }
 
 function damageHero(hero, amount, source = null) {
-  addBlood(hero.x, hero.y, amount, source ? "hero-hit" : "hero");
-  hero.hp = Math.max(0, hero.hp - amount);
+  const finalAmount = source ? (window.ProgressionSystem?.incomingDamage(hero, amount) || amount) : Math.round(amount);
+  playStrikeSfx();
+  addBlood(hero.x, hero.y, finalAmount, source ? "hero-hit" : "hero");
+  hero.hp = Math.max(0, hero.hp - finalAmount);
   applyMagicImpact(hero, source?.spellKind ? "#f8fbff" : "#ff9b7b", 0.28, 0.45);
   if (hero.hp > 0 && hero.hp / hero.maxHp <= LOW_HEALTH_FLASH_THRESHOLD) {
     hero.lowHealthHitT = LOW_HEALTH_FLASH_DURATION;
   }
   if (hero.hp <= 0) {
-    addBlood(hero.x, hero.y, amount * 1.3, "hero-down");
+    addBlood(hero.x, hero.y, finalAmount * 1.3, "hero-down");
     hero.hp = hero.maxHp;
     hero.lowHealthHitT = 0;
     hero.x = activeHero().x + (hash2(hero.x, hero.y) - 0.5) * 2;
     hero.y = activeHero().y + 1.2;
     toast(`${hero.name} was pulled back from the brink.`);
   }
+  return finalAmount;
 }
 
 function applyMagicImpact(actor, color = "#ffffff", flash = 0.24, shake = 0.28) {
@@ -1426,7 +2080,8 @@ function triggerScreenHit(flash = 0.18, shake = 0.28) {
 
 function attack(target = nearestEnemy()) {
   const player = activeHero();
-  const spec = skillInfo[state.mode] || skillInfo[player.skills?.bar?.find(id => skillInfo[id])] || skillInfo.cleave;
+  const skillId = skillInfo[state.mode] ? state.mode : player.skills?.bar?.find(id => skillInfo[id]) || "cleave";
+  const spec = window.ProgressionSystem?.effectiveSkillSpec(player, skillId, skillInfo) || skillInfo[skillId] || skillInfo.cleave;
   if (spec.type !== "self" && (!target || target.dead)) return;
   const dist = target ? distance(player, target) : 0;
   if (target && dist > spec.range) {
@@ -1441,19 +2096,24 @@ function attack(target = nearestEnemy()) {
   player[key] -= spec.cost;
   player.attackT = 0.32;
   if (spec.type === "self") {
-    player.mana = Math.min(player.maxMana + 20, player.mana + 20);
+    playMagicAttackSfx();
+    player.mana = Math.min(player.maxMana, player.mana + 18 + (spec.rank || 1) * 4);
     applyMagicImpact(player, spec.color, 0.45, 0.5);
     castRing(player.x, player.y, spec.color);
     burst(player.x, player.y, spec.color, 22);
     toast(`${spec.name} active.`);
   } else if (spec.type === "melee") {
-    hitEnemy(target, spec.damage, "melee");
+    playWeaponAttackSfx();
+    hitTarget(target, spec.damage, "melee", player);
     burst(target.x, target.y, spec.color, 12);
     castRing(target.x, target.y, spec.color);
   } else if (spec.type === "beam" || spec.type === "chain") {
+    playMagicAttackSfx();
     const targets = spec.type === "chain" ? nearestEnemies(spec.range, spec.maxTargets || 3, target) : [target];
     startSpellEffect(player, targets, spec, { hostile: false });
   } else {
+    if (spec.resource === "mana") playMagicAttackSfx();
+    else playWeaponAttackSfx();
     state.projectiles.push({
       x: player.x,
       y: player.y,
@@ -1461,7 +2121,8 @@ function attack(target = nearestEnemy()) {
       t: 0,
       speed: spec.speed,
       damage: spec.damage,
-      kind: state.mode,
+      kind: skillId,
+      caster: player,
       color: spec.color
     });
     castRing(target.x, target.y, spec.color);
@@ -1472,7 +2133,8 @@ function nearestEnemies(range = 8, count = 1, preferred = null) {
   const hero = activeHero();
   const targets = [
     ...state.enemies,
-    ...(state.animals || [])
+    ...(state.animals || []),
+    ...destructiblePropTargetsNear(hero, range)
   ]
     .filter(e => !e.dead && distance(e, hero) <= range)
     .map(e => ({ e, d: distance(e, hero) }))
@@ -1480,22 +2142,64 @@ function nearestEnemies(range = 8, count = 1, preferred = null) {
   return targets.slice(0, count).map(item => item.e);
 }
 
-function hitEnemy(target, damage, kind) {
+function hitTarget(target, damage, kind, attacker = activeHero()) {
+  if (target?.kind === "destructibleProp") {
+    hitDestructibleProp(target, damage, kind);
+  } else {
+    hitEnemy(target, damage, kind, attacker);
+  }
+}
+
+function hitDestructibleProp(target, damage, kind) {
   if (!target || target.dead) return;
-  const crit = Math.random() > 0.82;
-  const finalDamage = crit ? Math.round(damage * 1.8) : damage;
+  playStrikeSfx();
+  target.dead = true;
+  state.worldEdits[worldEditKey("prop", target.id)] = { dead: true };
+  applyMagicImpact(target, damageColorForKind(kind), 0.18, 0.24);
+  burst(target.x, target.y, "#c18a42", 16);
+  burst(target.x, target.y, "#f0c46a", 12);
+  addFloating("Smashed", target.x, target.y, "#ffcf75");
+  dropLoot(target);
+  toast(`${target.name} smashed.`);
+  saveGame(true);
+}
+
+function hitEnemy(target, damage, kind, attacker = activeHero()) {
+  if (!target || target.dead) return;
+  playStrikeSfx();
+  const attackerStats = attacker?.progression ? window.ProgressionSystem?.derivedStats(attacker) : null;
+  const critChance = attackerStats?.critChance ?? 0.18;
+  const critMultiplier = attackerStats?.critMultiplier ?? 1.8;
+  const crit = Math.random() < critChance;
+  const finalDamage = crit ? Math.round(damage * critMultiplier) : damage;
   target.hp = Math.max(0, target.hp - finalDamage);
+  if (target.kind !== "animal") {
+    target.alertT = Math.max(target.alertT || 0, 7);
+    target.aggro = Math.max(target.aggro || 0, 8.5);
+  }
   target.attackT = 0.22;
   applyMagicImpact(target, damageColorForKind(kind), 0.24, 0.36);
   addBlood(target.x, target.y, finalDamage, kind);
   addFloating(`${crit ? "Crit " : ""}-${finalDamage}`, target.x, target.y, kind === "frost" ? "#b9efff" : "#ffcf75");
   if (target.hp <= 0) {
     target.dead = true;
+    stopMonsterVoice(target);
     addBlood(target.x, target.y, finalDamage * 1.6, "kill", true);
     state.worldEdits[worldEditKey(target.kind === "animal" ? "animal" : "enemy", target.id)] = { dead: true };
     dropLoot(target);
-    if (target.kind !== "animal") activeHero().xp += 12;
-    toast(`${target.name} defeated.`);
+    if (target.kind !== "animal") {
+      const baseXp = window.ProgressionSystem?.enemyXp(target) || 12;
+      const xp = Math.round(baseXp * (target.xpMultiplier || 1));
+      const result = window.ProgressionSystem?.awardXp(attacker, xp);
+      addFloating(`+${xp} XP`, target.x, target.y, "#92eaff");
+      if (result?.levelsGained) toast(`${attacker.name} reached level ${result.level}.`);
+      else toast(`${target.name} defeated. +${xp} XP.`);
+      renderProgression();
+      renderHud();
+      saveGame(true);
+    } else {
+      toast(`${target.name} defeated.`);
+    }
   }
 }
 
@@ -1531,12 +2235,77 @@ function addBlood(x, y, damage, kind = "hit", fadeFast = false) {
 
 function dropLoot(enemyState) {
   const drop = enemyState.drop || (Math.random() > 0.5 ? "coinStack" : "redPotion");
-  state.loot.push({
-    id: drop,
-    x: enemyState.x + (Math.random() - 0.5) * 0.5,
-    y: enemyState.y + (Math.random() - 0.5) * 0.5,
-    qty: drop === "coinStack" ? Math.floor(12 + Math.random() * 28) : 1
-  });
+  const rolls = Math.max(1, enemyState.lootRolls || 1);
+  for (let i = 0; i < rolls; i++) {
+    const id = i === 0 ? drop : pickBonusLoot(enemyState, i);
+    state.loot.push(makeLootDrop(enemyState, id, i));
+  }
+  for (const id of enemyState.bonusDrops || []) {
+    if (Math.random() < (enemyState.rarity === "legendary" ? 0.72 : 0.48)) {
+      state.loot.push(makeLootDrop(enemyState, id, rolls + state.loot.length));
+    }
+  }
+  playRevealSfx();
+}
+
+function pickBonusLoot(enemyState, index) {
+  if (enemyState.rarity === "legendary" && index === 1) return "runeShard";
+  if (Math.random() < 0.62) return "coinStack";
+  const pool = enemyState.bonusDrops?.length ? enemyState.bonusDrops : ["redPotion", "bluePotion", "greenPotion"];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function makeLootDrop(enemyState, id, index = 0) {
+  const angle = hash2(Math.floor(enemyState.x * 19) + index, Math.floor(enemyState.y * 23) - index, WORLD_SEED + 313) * Math.PI * 2;
+  const radius = 0.18 + index * 0.16;
+  return {
+    id,
+    x: enemyState.x + Math.cos(angle) * radius + (Math.random() - 0.5) * 0.18,
+    y: enemyState.y + Math.sin(angle) * radius + (Math.random() - 0.5) * 0.18,
+    qty: id === "coinStack"
+      ? Math.floor((12 + Math.random() * 28) * (enemyState.goldMultiplier || 1))
+      : 1
+  };
+}
+
+function makeDestructiblePropTarget(propId, x, y) {
+  return {
+    id: propWorldId(propId, x, y),
+    name: "Barrels",
+    kind: "destructibleProp",
+    sprite: propId,
+    x,
+    y,
+    hp: 26,
+    maxHp: 26,
+    drop: hash2(x, y, WORLD_SEED + 509) > 0.45 ? "coinStack" : "redPotion",
+    lootRolls: hash2(x, y, WORLD_SEED + 523) > 0.82 ? 2 : 1,
+    goldMultiplier: 0.55,
+    dead: false
+  };
+}
+
+function destructiblePropTargetsNear(point, range = 8) {
+  const targets = [];
+  const minX = Math.floor(point.x - range);
+  const maxX = Math.ceil(point.x + range);
+  const minY = Math.floor(point.y - range);
+  const maxY = Math.ceil(point.y + range);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const tile = tileFromSeed(x, y);
+      if (!tile.prop || !isDestructiblePropId(tile.prop) || isDestroyedProp(tile.prop, x, y)) continue;
+      const target = makeDestructiblePropTarget(tile.prop, x, y);
+      if (distance(target, point) <= range) targets.push(target);
+    }
+  }
+  return targets;
+}
+
+function nearestDestructibleProp(point, range = 0.9) {
+  return destructiblePropTargetsNear(point, range)
+    .map(target => ({ target, d: distance(target, point) }))
+    .sort((a, b) => a.d - b.d)[0] || null;
 }
 
 function pickupNearbyLoot() {
@@ -1592,7 +2361,8 @@ function nearestEnemy(range = 8) {
   const hero = activeHero();
   const targets = [
     ...state.enemies,
-    ...(state.animals || [])
+    ...(state.animals || []),
+    ...destructiblePropTargetsNear(hero, range)
   ];
   for (const e of targets) {
     if (e.dead) continue;
@@ -1830,6 +2600,7 @@ function getVisibleProps(view, detail) {
     for (let x = startX; x <= bounds.maxX; x += step) {
       const tile = tileFromSeed(x, y);
       if (!tile.prop || tile.water) continue;
+      if (isDestroyedProp(tile.prop, x, y)) continue;
       const screen = worldToScreen(x, y);
       const tall = tile.prop.includes("tree") || tile.prop.includes("bramble");
       const width = tall ? 92 : 62;
@@ -2413,13 +3184,15 @@ function drawActor(actor) {
       : "brightness(1.28) saturate(1.18)";
   }
   const spriteYOffset = actor.kind === "player" || actor.kind === "enemy" ? PLAYER_ENEMY_SPRITE_Y_OFFSET : 0;
-  drawSprite(
-    actor.sprite,
-    frame.x * actorScale + attack * actorScale,
-    frame.y * actorScale + bob * actorScale + spriteYOffset,
-    frame.w * actorScale,
-    frame.h * actorScale
-  );
+  if (!drawAnimatedActorSprite(actor, actorScale, attack, bob, spriteYOffset)) {
+    drawSprite(
+      actor.sprite,
+      frame.x * actorScale + attack * actorScale,
+      frame.y * actorScale + bob * actorScale + spriteYOffset,
+      frame.w * actorScale,
+      frame.h * actorScale
+    );
+  }
   if (actor.kind === "player" && !spriteLookup[actor.sprite]?.fullBody) {
     drawSprite(actor.equipment.weapon, 13 + attack, -48 + bob + spriteYOffset, 36, 56);
   }
@@ -2447,9 +3220,9 @@ function drawNameplate(actor, p) {
   const h = 6;
   ctx.fillStyle = "rgba(0,0,0,0.65)";
   ctx.fillRect(p.x - w / 2, p.y - 76 * z * actorScale, w, h);
-  ctx.fillStyle = "#ad1d1d";
+  ctx.fillStyle = actor.rarity === "legendary" ? "#b16bff" : actor.rarity === "rare" ? "#d89b32" : "#ad1d1d";
   ctx.fillRect(p.x - w / 2, p.y - 76 * z * actorScale, w * (actor.hp / actor.maxHp), h);
-  drawLabel(actor.name, p.x, p.y - 88 * z * actorScale, "#ffb18c");
+  drawLabel(actor.name, p.x, p.y - 88 * z * actorScale, actor.rarity === "legendary" ? "#d9b4ff" : actor.rarity === "rare" ? "#ffd37a" : "#ffb18c");
 }
 
 function drawLoot(loot) {
@@ -2466,6 +3239,36 @@ function drawLoot(loot) {
 function actorSpriteFrame(id) {
   const sprite = spriteLookup[id];
   return sprite?.draw || { x: -28, y: -76, w: 56, h: 68 };
+}
+
+function drawAnimatedActorSprite(actor, actorScale, attack, bob, spriteYOffset) {
+  const animation = animatedActorSprites[actor.sprite];
+  if (!animation || !assetsReady) return false;
+  const image = images[animation.sheet];
+  if (!assetLoaded(image)) return false;
+  const cellW = image.naturalWidth / animation.cols;
+  const cellH = image.naturalHeight / animation.rows;
+  const playableFrames = animation.cols * (animation.playableRows || animation.rows);
+  const frameCount = Math.min(animation.frameCount || playableFrames, playableFrames);
+  const frameIndex = actor.moving ? Math.floor((actor.animT || 0) * animation.fps) % frameCount : 0;
+  const sx = (frameIndex % animation.cols) * cellW;
+  const sy = Math.floor(frameIndex / animation.cols) * cellH;
+  const draw = animation.draw || actorSpriteFrame(actor.sprite);
+  const drawH = draw.h * actorScale;
+  const drawW = (draw.w || draw.h * (cellW / cellH)) * actorScale;
+  const drawBob = actor.moving ? bob * actorScale : 0;
+  ctx.drawImage(
+    image,
+    sx,
+    sy,
+    cellW,
+    cellH,
+    draw.x * actorScale + attack * actorScale,
+    draw.y * actorScale + drawBob + spriteYOffset,
+    drawW,
+    drawH
+  );
+  return true;
 }
 
 function drawSprite(id, x, y, w, h) {
@@ -2750,35 +3553,62 @@ function drawMiniMap() {
   miniCtx.fillStyle = "#090b0a";
   miniCtx.fillRect(0, 0, miniMap.width, miniMap.height);
   const hero = activeHero();
-  const radiusX = 22;
-  const radiusY = 15;
-  const sx = miniMap.width / (radiusX * 2 + 1);
-  const sy = miniMap.height / (radiusY * 2 + 1);
-  const originX = Math.floor(hero.x) - radiusX;
-  const originY = Math.floor(hero.y) - radiusY;
-  for (let y = 0; y <= radiusY * 2; y++) {
-    for (let x = 0; x <= radiusX * 2; x++) {
-      const tile = getTile(originX + x, originY + y);
+  const mapScale = 0.11 * state.camera.zoom;
+  const cellX = (TILE_W / 2) * mapScale;
+  const cellY = (TILE_H / 2) * mapScale;
+  const centerX = miniMap.width / 2;
+  const centerY = miniMap.height / 2;
+  const bounds = visibleTileBounds(3);
+  const tileCount = Math.max(1, (bounds.maxX - bounds.minX + 1) * (bounds.maxY - bounds.minY + 1));
+  const step = Math.max(1, powerOfTwoCeil(Math.sqrt(tileCount / 1800)));
+  const toMini = (x, y) => ({
+    x: centerX + ((x - hero.x) - (y - hero.y)) * cellX,
+    y: centerY + ((x - hero.x) + (y - hero.y)) * cellY
+  });
+
+  for (let y = Math.floor(bounds.minY / step) * step; y <= bounds.maxY; y += step) {
+    for (let x = Math.floor(bounds.minX / step) * step; x <= bounds.maxX; x += step) {
+      const tile = getTile(x, y);
+      const p = toMini(x + step * 0.5, y + step * 0.5);
       miniCtx.fillStyle = tile.water ? "#075462" : tile.road ? "#76684b" : tile.biome === "ruins" ? "#4b4a42" : tile.biome === "marsh" ? "#1e5950" : "#303a24";
-      miniCtx.fillRect(x * sx, y * sy, sx + 0.5, sy + 0.5);
+      miniCtx.beginPath();
+      miniCtx.moveTo(p.x, p.y - cellY * step);
+      miniCtx.lineTo(p.x + cellX * step, p.y);
+      miniCtx.lineTo(p.x, p.y + cellY * step);
+      miniCtx.lineTo(p.x - cellX * step, p.y);
+      miniCtx.closePath();
+      miniCtx.fill();
     }
   }
   miniCtx.fillStyle = "#d8a73a";
-  for (const b of state.buildings) miniCtx.fillRect((b.x - originX) * sx, (b.y - originY) * sy, Math.max(3, b.w * sx), Math.max(3, b.h * sy));
+  for (const b of state.buildings) {
+    if (b.x > bounds.maxX || b.x + b.w < bounds.minX || b.y > bounds.maxY || b.y + b.h < bounds.minY) continue;
+    const p = toMini(b.x + b.w / 2, b.y + b.h / 2);
+    miniCtx.fillRect(p.x - 3, p.y - 3, 6, 6);
+  }
   miniCtx.fillStyle = "#df3b2f";
-  for (const e of state.enemies) if (!e.dead) miniCtx.fillRect((e.x - originX) * sx - 2, (e.y - originY) * sy - 2, 4, 4);
+  for (const e of state.enemies) {
+    if (e.dead || e.x < bounds.minX || e.x > bounds.maxX || e.y < bounds.minY || e.y > bounds.maxY) continue;
+    const p = toMini(e.x, e.y);
+    miniCtx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  }
   miniCtx.fillStyle = "#86a6ff";
-  for (const h of state.heroes) miniCtx.fillRect((h.x - originX) * sx - 2, (h.y - originY) * sy - 2, 4, 4);
+  for (const h of state.heroes) {
+    if (h.x < bounds.minX || h.x > bounds.maxX || h.y < bounds.minY || h.y > bounds.maxY) continue;
+    const p = toMini(h.x, h.y);
+    miniCtx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  }
   miniCtx.fillStyle = "#61d8ff";
   miniCtx.beginPath();
-  miniCtx.arc(radiusX * sx, radiusY * sy, 4, 0, Math.PI * 2);
+  miniCtx.arc(centerX, centerY, 4, 0, Math.PI * 2);
   miniCtx.fill();
+  document.getElementById("miniMapZoom").textContent = `${Math.round(state.camera.zoom * 100)}%`;
 }
 
 function drawMiniMapThrottled(force = false) {
   const now = performance.now();
   const hero = activeHero();
-  const key = `${Math.floor(hero.x)},${Math.floor(hero.y)},${state.enemies.length},${state.buildings.length}`;
+  const key = `${Math.floor(hero.x)},${Math.floor(hero.y)},${state.camera.zoom.toFixed(2)},${state.enemies.length},${state.buildings.length}`;
   if (!force && key === lastMiniMapKey && now - lastMiniMapRender < MINIMAP_FRAME_MS) return;
   lastMiniMapKey = key;
   lastMiniMapRender = now;
@@ -2841,6 +3671,7 @@ function toast(message) {
 
 function renderHud() {
   const p = activeHero();
+  window.ProgressionSystem?.applyDerivedStats(p);
   const healthPercent = clamp(p.hp / p.maxHp * 100, 0, 100);
   const manaPercent = clamp(p.mana / p.maxMana * 100, 0, 100);
   document.querySelector(".health-orb")?.style.setProperty("--orb-fill", `${healthPercent}%`);
@@ -2859,6 +3690,101 @@ function renderHud() {
     if (mana) mana.style.width = `${hero.mana / hero.maxMana * 100}%`;
     if (stamina) stamina.style.width = `${hero.stamina / hero.maxStamina * 100}%`;
   });
+}
+
+function renderProgression() {
+  const panel = document.getElementById("progressionPanel");
+  if (!panel || !window.ProgressionSystem) return;
+  const hero = activeHero();
+  ProgressionSystem.normalizeHero(hero, skillInfo);
+  const nextXp = ProgressionSystem.xpToNext(hero.level);
+  const xpPercent = clamp(hero.xp / nextXp * 100, 0, 100);
+  document.getElementById("progressionTitle").textContent = `${hero.name} Progression`;
+  document.getElementById("heroLevel").textContent = hero.level;
+  document.getElementById("attributePoints").textContent = hero.progression.attributePoints;
+  document.getElementById("skillPoints").textContent = hero.progression.skillPoints;
+  document.getElementById("xpText").textContent = `${hero.xp} / ${nextXp} XP`;
+  document.getElementById("xpFill").style.width = `${xpPercent}%`;
+
+  const attributeGrid = document.getElementById("attributeGrid");
+  attributeGrid.innerHTML = "";
+  for (const attr of ProgressionSystem.ATTRIBUTE_DEFS) {
+    const value = hero.progression.attributes[attr.id] || 0;
+    const row = document.createElement("div");
+    row.className = "attribute-row";
+    row.title = `${attr.name}: ${attr.perPoint}`;
+    row.innerHTML = `
+      <b>${attr.short}</b>
+      <span>${attr.name}<small>${value} points</small></span>
+      <button type="button" title="Spend attribute point" ${hero.progression.attributePoints <= 0 ? "disabled" : ""}>+</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => spendAttribute(attr.id));
+    attributeGrid.appendChild(row);
+  }
+
+  const skillTree = document.getElementById("skillTree");
+  skillTree.innerHTML = "";
+  for (const node of ProgressionSystem.skillNodes()) {
+    const skill = skillInfo[node.id];
+    if (!skill) continue;
+    const known = hero.skills.known.includes(node.id);
+    const rank = hero.skills.ranks[node.id] || 0;
+    const check = ProgressionSystem.canSpendSkillPoint(hero, node.id, skillInfo);
+    const card = document.createElement("div");
+    card.className = `skill-node ${known ? "unlocked" : "locked"} ${rank >= ProgressionSystem.MAX_SKILL_RANK ? "maxed" : ""}`;
+    const status = known ? `Rank ${rank}/${ProgressionSystem.MAX_SKILL_RANK}` : `Level ${node.level}`;
+    const action = known ? "+" : "+";
+    card.title = known
+      ? `${skill.name}: ${skill.text}`
+      : `${skill.name}: ${check.reason || "Locked"}`;
+    card.innerHTML = `
+      <span class="sprite" data-sprite="${skill.icon}"></span>
+      <strong>${skill.name}</strong>
+      <small>${node.branch} - ${status}</small>
+      <button type="button" title="${check.ok ? "Spend skill point" : check.reason}" ${check.ok ? "" : "disabled"}>${action}</button>
+    `;
+    card.querySelector("button").addEventListener("click", () => spendSkill(node.id));
+    skillTree.appendChild(card);
+  }
+  applySpriteStyles();
+}
+
+function spendAttribute(attrId) {
+  const hero = activeHero();
+  if (!window.ProgressionSystem?.spendAttributePoint(hero, attrId)) return;
+  const attr = ProgressionSystem.ATTRIBUTE_DEFS.find(item => item.id === attrId);
+  renderProgression();
+  renderHud();
+  saveGame(true);
+  toast(`${attr?.name || "Attribute"} improved.`);
+}
+
+function spendSkill(skillId) {
+  const hero = activeHero();
+  const result = window.ProgressionSystem?.spendSkillPoint(hero, skillId, skillInfo);
+  if (!result?.ok) {
+    toast(result?.reason || "Skill locked.");
+    return;
+  }
+  if (!hero.skills.bar.includes(skillId)) {
+    const empty = hero.skills.bar.findIndex(slot => !slot);
+    if (empty >= 0) hero.skills.bar[empty] = skillId;
+  }
+  state.selectedSkill = skillId;
+  state.mode = skillId;
+  renderProgression();
+  renderInventory();
+  renderHud();
+  saveGame(true);
+  toast(`${skillInfo[skillId].name} ${result.action === "unlock" ? "unlocked" : `rank ${result.rank}`}.`);
+}
+
+function toggleProgression(forceOpen = null) {
+  const panel = document.getElementById("progressionPanel");
+  if (!panel) return;
+  const open = forceOpen ?? panel.classList.contains("collapsed");
+  panel.classList.toggle("collapsed", !open);
+  if (open) renderProgression();
 }
 
 function renderInventory() {
@@ -2882,6 +3808,7 @@ function renderInventory() {
         button.dataset.index = itemIndex;
         button.draggable = true;
         button.title = itemName(inv.id);
+        if (itemInfo[inv.id]?.type === "weapon") button.classList.add("weapon-slot");
         if (state.selectedItem === inv.id) button.classList.add("selected");
         button.innerHTML = `<span class="sprite" data-sprite="${inv.id}"></span><small>${inv.qty > 1 ? inv.qty : ""}</small>`;
         button.addEventListener("click", () => selectItem(inv.id));
@@ -2906,6 +3833,7 @@ function renderInventory() {
     const id = hero.equipment[slot.dataset.slot];
     const labels = { weapon: "Weapon", helm: "Helm", chest: "Armour", gloves: "Gloves", boots: "Boots", trinket: "Trinket", offhand: "Offhand" };
     const label = labels[slot.dataset.slot] || slot.dataset.slot;
+    slot.classList.toggle("weapon-slot", itemInfo[id]?.type === "weapon");
     slot.innerHTML = `<span class="slot-label">${label}</span>${id ? `<span class="sprite" data-sprite="${id}"></span>` : ""}`;
     slot.ondragover = event => event.preventDefault();
     slot.ondrop = event => {
@@ -2930,10 +3858,11 @@ function renderSkills() {
   hero.skills.bar.forEach((id, index) => {
     const skill = skillInfo[id];
     const item = itemInfo[id];
+    const effective = skill ? window.ProgressionSystem?.effectiveSkillSpec(hero, id, skillInfo) : null;
     const button = document.createElement("button");
     button.className = "skill";
     button.dataset.slot = index;
-    button.title = skill ? `${skill.name} - ${skill.buff}` : item ? item.name : "Empty skill slot";
+    button.title = skill ? `${skill.name} rank ${effective?.rank || 1} - ${skill.buff}` : item ? item.name : "Empty skill slot";
     if (skill && state.mode === id) button.classList.add("active");
     if (id) button.dataset.action = id;
     const icon = skill?.icon || id;
@@ -2951,12 +3880,13 @@ function renderSkills() {
   for (const id of hero.skills.known) {
     const skill = skillInfo[id];
     if (!skill) continue;
+    const effective = window.ProgressionSystem?.effectiveSkillSpec(hero, id, skillInfo);
     const button = document.createElement("button");
     button.className = "inventory-slot";
     if (state.selectedSkill === id) button.classList.add("selected");
     button.dataset.skill = id;
     button.draggable = true;
-    button.title = `${skill.name} - ${skill.buff}`;
+    button.title = `${skill.name} rank ${effective?.rank || 1} - ${skill.buff}`;
     button.innerHTML = `<span class="sprite" data-sprite="${skill.icon}"></span>`;
     button.addEventListener("click", () => selectSkill(id));
     button.addEventListener("dblclick", () => {
@@ -2999,9 +3929,12 @@ function assignDraggedSkill(index) {
 function selectSkill(id) {
   const skill = skillInfo[id];
   if (!skill) return;
+  const hero = activeHero();
+  const effective = window.ProgressionSystem?.effectiveSkillSpec(hero, id, skillInfo) || skill;
+  const rankText = effective.rank ? `Rank ${effective.rank}. ` : "";
   state.selectedSkill = id;
   state.selectedItem = null;
-  document.getElementById("itemDetails").innerHTML = `<strong>${skill.name}</strong><span>${skill.text} Buff: ${skill.buff}. Cost: ${skill.cost} ${skill.resource}. Drag this skill onto the hotbar.</span>`;
+  document.getElementById("itemDetails").innerHTML = `<strong>${skill.name}</strong><span>${rankText}${skill.text} Buff: ${skill.buff}. Damage: ${effective.damage}. Cost: ${effective.cost} ${skill.resource}. Drag this skill onto the hotbar.</span>`;
   renderSkills();
 }
 
@@ -3133,18 +4066,21 @@ function handleCanvasClick(event) {
     .filter(e => !e.dead)
     .map(e => ({ e, d: Math.hypot(e.x - world.x, e.y - world.y) }))
     .sort((a, b) => a.d - b.d)[0];
-  if (target && target.d < 0.9) attack(target.e);
+  const propTarget = nearestDestructibleProp(world, 0.9);
+  if (target && target.d < 0.9 && (!propTarget || target.d <= propTarget.d)) attack(target.e);
+  else if (propTarget) attack(propTarget.target);
   else if (!tileBlocked(world.x, world.y)) {
     const hero = activeHero();
-    const nx = hero.x + (world.x - hero.x) * 0.12;
-    const ny = hero.y + (world.y - hero.y) * 0.12;
-    moveEntityWithCollision(hero, nx, ny);
+    const clickStep = Math.min(0.38, Math.hypot(world.x - hero.x, world.y - hero.y) * 0.12);
+    moveEntityToward(hero, world.x, world.y, clickStep, { maxDistance: 14 });
   }
 }
 
 function bindEvents() {
   addEventListener("resize", resize);
+  addEventListener("pointerdown", requestGameMusicStart, { capture: true });
   addEventListener("keydown", event => {
+    requestGameMusicStart();
     const key = event.key.toLowerCase();
     state.keys.add(key);
     if (["1", "2", "3", "4", "5", "6"].includes(key)) activateHotbarSlot(Number(key) - 1);
@@ -3164,6 +4100,7 @@ function bindEvents() {
     if (key === "q") useItem("redPotion");
     if (key === "r") useItem("bluePotion");
     if (key === "i") toggleInventory();
+    if (key === "p") toggleProgression();
     if (key === "m") enableFollowCamera();
     if (key === "e") {
       const npc = nearestNpc();
@@ -3189,6 +4126,8 @@ function bindEvents() {
   document.getElementById("centerView").addEventListener("click", () => enableFollowCamera());
   document.getElementById("toggleInventory").addEventListener("click", toggleInventory);
   document.getElementById("inventoryHandle").addEventListener("click", toggleInventory);
+  document.getElementById("progressionToggle").addEventListener("click", () => toggleProgression());
+  document.getElementById("closeProgression").addEventListener("click", () => toggleProgression(false));
   document.getElementById("restartGame").addEventListener("click", restartGame);
   document.getElementById("closeChat").addEventListener("click", () => document.getElementById("chatPanel").classList.remove("open"));
   document.querySelectorAll(".party-member[data-hero]").forEach(member => member.addEventListener("click", () => setActiveHero(member.dataset.hero)));
@@ -3230,9 +4169,11 @@ async function start() {
   refreshActiveWorld();
   bindEvents();
   renderInventory();
+  renderProgression();
   renderHud();
   await loadAssets();
   renderInventory();
+  renderProgression();
   drawMiniMapThrottled(true);
   requestAnimationFrame(loop);
 }

@@ -25,6 +25,14 @@
       "id": "biome_village_atlas",
       "file": "biome-village-atlas.png",
       "sourceFile": "biome-village-source-magenta.png",
+      "atlasSize": {
+        "width": 1254,
+        "height": 1360
+      },
+      "approxCellSize": {
+        "width": 313.5,
+        "height": 340
+      },
       "promptSummary": "4x4 isometric dark-fantasy village, ruin, campsite, and supply props on flat magenta chroma key: well, ruins, huts, wagon, signpost, fires, fences, shrine, altar, crates, barrels, sacks, and tower base."
     },
     {
@@ -52,22 +60,22 @@
     { "id": "forest_bramble_arch", "kind": "bramble", "atlas": "biome-forest-atlas.png", "cell": { "col": 2, "row": 3 }, "approxRect": { "x": 627, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Bramble arch for haunted woodland passage dressing." },
     { "id": "forest_dark_fern_cluster", "kind": "fern", "atlas": "biome-forest-atlas.png", "cell": { "col": 3, "row": 3 }, "approxRect": { "x": 941, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Dark fern cluster with layered leaves." },
 
-    { "id": "village_old_stone_well", "kind": "well", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 0 }, "approxRect": { "x": 0, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Old stone well with wooden roof, isometric ruin prop." },
-    { "id": "village_ruined_cottage_corner", "kind": "ruin", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 0 }, "approxRect": { "x": 314, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Ruined cottage wall corner with mossy stone." },
-    { "id": "village_collapsed_house", "kind": "building", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 0 }, "approxRect": { "x": 627, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Collapsed village house variant in gloomy woodland style." },
-    { "id": "village_gloomy_woodland_hut", "kind": "building", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 0 }, "approxRect": { "x": 941, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Intact gloomy woodland hut for biome village dressing." },
-    { "id": "village_broken_wagon", "kind": "wagon", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 1 }, "approxRect": { "x": 0, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Broken medieval wagon with weathered wood and rust." },
-    { "id": "village_blank_signpost", "kind": "signpost", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 1 }, "approxRect": { "x": 314, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Weathered blank signpost, no readable text." },
-    { "id": "village_extinguished_campfire", "kind": "campfire", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 1 }, "approxRect": { "x": 627, "y": 314, "w": 314, "h": 313 }, "promptSummary": "Extinguished campfire ring with ash and stones." },
-    { "id": "village_lit_campfire", "kind": "campfire", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 1 }, "approxRect": { "x": 941, "y": 314, "w": 313, "h": 313 }, "promptSummary": "Lit campfire with contained flame and ember glow." },
-    { "id": "village_broken_fence_segment", "kind": "fence", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 2 }, "approxRect": { "x": 0, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Broken wooden fence segment, dark-fantasy village prop." },
-    { "id": "village_crooked_fence_corner", "kind": "fence", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 2 }, "approxRect": { "x": 314, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Crooked fence corner for village boundaries." },
-    { "id": "village_forest_shrine", "kind": "shrine", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 2 }, "approxRect": { "x": 627, "y": 627, "w": 314, "h": 314 }, "promptSummary": "Small forest shrine with candle glow." },
-    { "id": "village_cracked_stone_altar", "kind": "shrine", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 2 }, "approxRect": { "x": 941, "y": 627, "w": 313, "h": 314 }, "promptSummary": "Cracked stone altar with moss and grim mood." },
-    { "id": "village_stacked_crates", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 3 }, "approxRect": { "x": 0, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Stacked wooden crates with worn edges." },
-    { "id": "village_barrels_cluster", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 3 }, "approxRect": { "x": 314, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Cluster of old barrels with iron bands." },
-    { "id": "village_supply_pile", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 3 }, "approxRect": { "x": 627, "y": 941, "w": 314, "h": 313 }, "promptSummary": "Supply pile with sacks and rope." },
-    { "id": "village_ruined_watchtower_base", "kind": "ruin", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 3 }, "approxRect": { "x": 941, "y": 941, "w": 313, "h": 313 }, "promptSummary": "Ruined watchtower base with stone and timber remnants." },
+    { "id": "village_old_stone_well", "kind": "well", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 0 }, "approxRect": { "x": 0, "y": 0, "w": 314, "h": 340 }, "promptSummary": "Old stone well with wooden roof, isometric ruin prop." },
+    { "id": "village_ruined_cottage_corner", "kind": "ruin", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 0 }, "approxRect": { "x": 314, "y": 0, "w": 313, "h": 340 }, "promptSummary": "Ruined cottage wall corner with mossy stone." },
+    { "id": "village_collapsed_house", "kind": "building", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 0 }, "approxRect": { "x": 627, "y": 0, "w": 314, "h": 340 }, "promptSummary": "Collapsed village house variant in gloomy woodland style." },
+    { "id": "village_gloomy_woodland_hut", "kind": "building", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 0 }, "approxRect": { "x": 941, "y": 0, "w": 313, "h": 340 }, "promptSummary": "Intact gloomy woodland hut for biome village dressing." },
+    { "id": "village_broken_wagon", "kind": "wagon", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 1 }, "approxRect": { "x": 0, "y": 340, "w": 314, "h": 340 }, "promptSummary": "Broken medieval wagon with weathered wood and rust." },
+    { "id": "village_blank_signpost", "kind": "signpost", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 1 }, "approxRect": { "x": 314, "y": 340, "w": 313, "h": 340 }, "promptSummary": "Weathered blank signpost, no readable text." },
+    { "id": "village_extinguished_campfire", "kind": "campfire", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 1 }, "approxRect": { "x": 627, "y": 340, "w": 314, "h": 340 }, "promptSummary": "Extinguished campfire ring with ash and stones." },
+    { "id": "village_lit_campfire", "kind": "campfire", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 1 }, "approxRect": { "x": 941, "y": 340, "w": 313, "h": 340 }, "promptSummary": "Lit campfire with contained flame and ember glow." },
+    { "id": "village_broken_fence_segment", "kind": "fence", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 2 }, "approxRect": { "x": 0, "y": 680, "w": 314, "h": 340 }, "promptSummary": "Broken wooden fence segment, dark-fantasy village prop." },
+    { "id": "village_crooked_fence_corner", "kind": "fence", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 2 }, "approxRect": { "x": 314, "y": 680, "w": 313, "h": 340 }, "promptSummary": "Crooked fence corner for village boundaries." },
+    { "id": "village_forest_shrine", "kind": "shrine", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 2 }, "approxRect": { "x": 627, "y": 680, "w": 314, "h": 340 }, "promptSummary": "Small forest shrine with candle glow." },
+    { "id": "village_cracked_stone_altar", "kind": "shrine", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 2 }, "approxRect": { "x": 941, "y": 680, "w": 313, "h": 340 }, "promptSummary": "Cracked stone altar with moss and grim mood." },
+    { "id": "village_stacked_crates", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 0, "row": 3 }, "approxRect": { "x": 0, "y": 1020, "w": 314, "h": 340 }, "promptSummary": "Stacked wooden crates with worn edges." },
+    { "id": "village_barrels_cluster", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 1, "row": 3 }, "approxRect": { "x": 314, "y": 1020, "w": 313, "h": 340 }, "promptSummary": "Cluster of old barrels with iron bands." },
+    { "id": "village_supply_pile", "kind": "container", "atlas": "biome-village-atlas.png", "cell": { "col": 2, "row": 3 }, "approxRect": { "x": 627, "y": 1020, "w": 314, "h": 340 }, "promptSummary": "Supply pile with sacks and rope." },
+    { "id": "village_ruined_watchtower_base", "kind": "ruin", "atlas": "biome-village-atlas.png", "cell": { "col": 3, "row": 3 }, "approxRect": { "x": 941, "y": 1020, "w": 313, "h": 340 }, "promptSummary": "Ruined watchtower base with stone and timber remnants." },
 
     { "id": "creature_small_rabbit_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 0, "row": 0 }, "approxRect": { "x": 0, "y": 0, "w": 314, "h": 314 }, "promptSummary": "Small rabbit-like woodland animal silhouette." },
     { "id": "creature_small_fox_silhouette", "kind": "animal", "atlas": "biome-creatures-buildings-atlas.png", "cell": { "col": 1, "row": 0 }, "approxRect": { "x": 314, "y": 0, "w": 313, "h": 314 }, "promptSummary": "Small fox-like woodland animal silhouette." },

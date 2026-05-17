@@ -37,16 +37,65 @@
       </div>
     </section>
 
-    <section class="quest-panel panel-metal">
-      <h1>The Weeping Grove</h1>
-      <label><input id="questTemple" type="checkbox"> Find the Temple Depths</label>
-      <label><input id="questPriest" type="checkbox"> Slay a Graven Priest</label>
+    <section class="quest-panel framed-panel">
+      <div class="panel-frame frame-top"></div>
+      <div class="panel-frame frame-right"></div>
+      <div class="panel-frame frame-bottom"></div>
+      <div class="panel-frame frame-left"></div>
+      <div class="panel-frame corner-tl"></div>
+      <div class="panel-frame corner-tr"></div>
+      <div class="panel-frame corner-br"></div>
+      <div class="panel-frame corner-bl"></div>
+      <div class="quest-content framed-content">
+        <h1>The Weeping Grove</h1>
+        <label><input id="questTemple" type="checkbox"> Find the Temple Depths</label>
+        <label><input id="questPriest" type="checkbox"> Slay a Graven Priest</label>
+      </div>
     </section>
 
     <button id="restartGame" class="restart-button panel-metal" type="button" title="Restart game">Restart</button>
+    <button id="progressionToggle" class="progression-toggle panel-metal" type="button" title="Progression">P</button>
+
+    <aside id="progressionPanel" class="progression-panel framed-panel collapsed" aria-label="Progression">
+      <div class="panel-frame frame-top"></div>
+      <div class="panel-frame frame-right"></div>
+      <div class="panel-frame frame-bottom"></div>
+      <div class="panel-frame frame-left"></div>
+      <div class="panel-frame corner-tl"></div>
+      <div class="panel-frame corner-tr"></div>
+      <div class="panel-frame corner-br"></div>
+      <div class="panel-frame corner-bl"></div>
+      <div class="progression-content framed-content">
+        <header>
+          <button id="closeProgression" class="close-button" title="Close progression">X</button>
+          <h2 id="progressionTitle">Progression</h2>
+        </header>
+        <section class="level-summary" aria-label="Level and experience">
+          <div>
+            <span>Level</span>
+            <strong id="heroLevel">1</strong>
+          </div>
+          <div>
+            <span>Attribute Points</span>
+            <strong id="attributePoints">0</strong>
+          </div>
+          <div>
+            <span>Skill Points</span>
+            <strong id="skillPoints">0</strong>
+          </div>
+          <div class="xp-track">
+            <span id="xpText">0 / 100 XP</span>
+            <i id="xpFill"></i>
+          </div>
+        </section>
+        <section id="attributeGrid" class="attribute-grid" aria-label="Attributes"></section>
+        <section id="skillTree" class="skill-tree" aria-label="Skill and spell tree"></section>
+      </div>
+    </aside>
 
     <section class="minimap panel-metal" aria-label="Mini map">
       <canvas id="miniMap" width="210" height="150"></canvas>
+      <span id="miniMapZoom" class="minimap-zoom">100%</span>
       <div class="zoom-controls">
         <button id="zoomIn" class="icon-button" title="Zoom in">+</button>
         <button id="zoomOut" class="icon-button" title="Zoom out">-</button>
@@ -122,10 +171,12 @@
 
     <footer class="hud">
       <div class="orb health-orb">
+        <i class="orb-fill-overlay" aria-hidden="true"></i>
         <span id="healthValue">120 / 120</span>
       </div>
       <div id="skillBar" class="skill-bar panel-metal"></div>
       <div class="orb mana-orb">
+        <i class="orb-fill-overlay" aria-hidden="true"></i>
         <span id="manaValue">80 / 80</span>
       </div>
       <div class="stamina-strip">
@@ -135,10 +186,11 @@
     </footer>
 
     <div class="hint-line">
-      WASD move, Tab/F1-F3 switch hero, mouse wheel zoom, click targets, E talk/enter, I inventory, drag items, 1-4 skills, Space attack
+      WASD move, Tab/F1-F3 switch hero, mouse wheel zoom, click targets, E talk/enter, I inventory, P progression, drag items, 1-6 skills, Space attack
     </div>
   </div>
 
+  <script src="progression.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
