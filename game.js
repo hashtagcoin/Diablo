@@ -82,14 +82,29 @@ const PROP_COLLISION_RADII = {
   village_cracked_stone_altar: 0.58,
   village_stacked_crates: 0.54,
   village_barrels_cluster: 0.56,
+  village2_roofed_stone_well: 0.62,
+  village2_siege_ballista: 0.7,
+  village2_hanging_cage_gibbet: 0.5,
+  village2_hanging_cage_post: 0.5,
+  village3_statue_fountain: 0.64,
+  village3_blue_brazier_pedestal: 0.48,
+  village3_graveyard_cluster: 0.62,
+  village4_roofed_well: 0.62,
   building_mossy_stone_foundation: 0.78,
   forest_fallen_log: 0.62,
   forest_hollow_log: 0.58,
   forest_mossy_boulder_cluster: 0.62,
   forest_jagged_slate_rocks: 0.58,
-  forest_bramble_arch: 0.54
+  forest_bramble_arch: 0.54,
+  rubble_mossy_low_wall: 0.5,
+  rubble_mossy_boulder_outcrop: 0.58,
+  rubble_gray_boulder_cluster: 0.5,
+  rubble_jagged_rock_spire: 0.62,
+  rubble2_large_boulder_cluster: 0.58,
+  rubble2_mossy_rock_cluster: 0.5,
+  rubble2_moss_covered_rocks: 0.52
 };
-const NON_SOLID_PROP_PARTS = ["mushroom", "fern", "roots_patch"];
+const NON_SOLID_PROP_PARTS = ["mushroom", "fern", "roots_patch", "wildflower", "grass", "ground", "path", "patch", "scrub", "thistle"];
 const NAV_GRID_STEP = 0.5;
 const NAV_DIRECT_SAMPLE_STEP = 0.18;
 const NAV_REPATH_INTERVAL_MS = 180;
@@ -103,6 +118,50 @@ const ENEMY_DENSITY_SCALE = 0.25;
 const LANDMARK_ENEMY_RADIUS = 4.2;
 const LANDMARK_ENEMY_CHANCE = 0.82;
 const DESTRUCTIBLE_PROP_PARTS = ["barrel"];
+const EDITOR_SCALE_MIN = 0.25;
+const EDITOR_SCALE_MAX = 4;
+const EDITOR_PREFAB_RANDOM_RADIUS = 3.8;
+const EDITOR_LAYERS = ["ground", "building", "vegetation"];
+const DEFAULT_EDITOR_LAYER_VISIBILITY = { ground: true, building: true, vegetation: true };
+const WALL_ATLAS_FILE = "stonewall.png";
+const WALL_ATLAS_WIDTH = 166;
+const WALL_ATLAS_HEIGHT = 97;
+const WALL_CELL_WIDTH = WALL_ATLAS_WIDTH / 2;
+const WALL_CELL_HEIGHT = WALL_ATLAS_HEIGHT;
+const WALL_SPRITES = {
+  segment: "stonewall_segment",
+  gate: "stonewall_gate"
+};
+const DEFAULT_WALL_SPRITE_DEFS = [
+  { id: WALL_SPRITES.segment, name: "Stone Wall Segment", role: "segment", col: 0, row: 0, kind: "wall" },
+  { id: WALL_SPRITES.gate, name: "Stone Wall Gate", role: "gate", col: 1, row: 0, kind: "gate" }
+];
+const PLAN_GRID_SIZE = 12;
+const PLAN_RUINS_TILESET_CHANCE = 0.16;
+const PLAN_BUILDING_SPAWN_CHANCE = 0.7;
+const PLAN_RUINS_BUILDING_SPAWN_CHANCE = 0.25;
+const PLAN_TILESET_DEFS = {
+  village: { label: "Village", file: "village.png", wallFile: "villagewalls.png" },
+  ruins: { label: "Ruins", file: "ruins.png", wallFile: "ruinswalls.png" },
+  castle: { label: "Castle", file: "castle.png", wallFile: "castlewalls.png" },
+  graveyard: { label: "Graveyard", file: "graveyard.png", wallFile: "graveyardwalls.png" },
+  dungeon: { label: "Dungeon", file: "dungeon.png", wallFile: "dungeonwalls.png" },
+  undead: { label: "Undead", file: "undead.png", wallFile: "undeadwalls.png" }
+};
+const PLAN_BRUSHES = [
+  { id: "wall", label: "Walls", color: "#b7b9b0" },
+  { id: "house", label: "Houses", color: "#d99a42" },
+  { id: "tower", label: "Towers", color: "#8f7cc8" },
+  { id: "building", label: "Buildings", color: "#c85f47" },
+  { id: "grave", label: "Graves", color: "#d7d2bf" },
+  { id: "prop", label: "Props", color: "#6ea867" },
+  { id: "erase", label: "Erase", color: "#1c1712" }
+];
+const PLAN_BRUSH_BY_ID = Object.fromEntries(PLAN_BRUSHES.map(brush => [brush.id, brush]));
+const PLAN_TILESET_ROLE_ROWS = {
+  walls: ["wall", "wall", "wall", "wall"],
+  main: ["house", "tower", "building", "prop"]
+};
 
 function makeHero(id, name, x, y, stats, equipment, inventory) {
   const progression = window.ProgressionSystem?.createHeroProgression({
@@ -294,6 +353,7 @@ const biomeAssets = {};
 const biomeSprites = {};
 const spriteLookup = {};
 const keyedSpriteCache = {};
+const planTilesetStatus = {};
 let assetsReady = false;
 
 const generatedWorldFiles = {
@@ -384,7 +444,30 @@ const state = {
   screenFlash: 0,
   screenShake: 0,
   renderShake: { x: 0, y: 0 },
-  quest: { temple: false, priest: false }
+  quest: { temple: false, priest: false },
+  editor: {
+    open: false,
+    selected: null,
+    selectedDraftIndexes: [],
+    movingDraftItem: null,
+    activeLayer: "building",
+    layerVisibility: { ...DEFAULT_EDITOR_LAYER_VISIBILITY },
+    scales: {},
+    prefabs: [],
+    plans: [],
+    draft: { name: "New Set", occurrence: 4, anchor: null, items: [] },
+    planDraft: { name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {} },
+    planModal: { x: null, y: null, width: 540, height: 620 },
+    planTilesetSources: {},
+    placingPrefabId: null,
+    placements: [],
+    lineMode: false,
+    planView: false,
+    lineCategory: "village",
+    lineShape: "straight",
+    brushDensity: 4,
+    contextTarget: null
+  }
 };
 
 Object.defineProperty(state, "player", {
@@ -508,6 +591,8 @@ async function loadAssets() {
   } catch (error) {
     console.warn("Biome manifest failed, using procedural color props only.", error);
   }
+  await loadBiomeWallAssets();
+  await loadPlanTilesetAssets();
 
   try {
     const res = await fetch("sprite-lookup.json");
@@ -577,18 +662,124 @@ function makeTerrainImage(src) {
   return image;
 }
 
+async function loadBiomeWallAssets() {
+  if (!biomeAssets[WALL_ATLAS_FILE]) {
+    const image = new Image();
+    image.src = `assets/biome/${WALL_ATLAS_FILE}`;
+    biomeAssets[WALL_ATLAS_FILE] = image;
+  }
+  registerDefaultWallSprites();
+}
+
+function registerDefaultWallSprites() {
+  for (const def of DEFAULT_WALL_SPRITE_DEFS) {
+    biomeSprites[def.id] = {
+      id: def.id,
+      name: def.name,
+      kind: def.kind,
+      wallRole: def.role,
+      atlas: WALL_ATLAS_FILE,
+      cell: { col: def.col, row: def.row, w: WALL_CELL_WIDTH, h: WALL_CELL_HEIGHT },
+      approxRect: {
+        x: def.col * WALL_CELL_WIDTH,
+        y: def.row * WALL_CELL_HEIGHT,
+        w: WALL_CELL_WIDTH,
+        h: WALL_CELL_HEIGHT
+      },
+      promptSummary: `${def.name}, modular stone wall sprite`
+    };
+  }
+}
+
+async function loadPlanTilesetAssets() {
+  for (const tilesetId of Object.keys(PLAN_TILESET_DEFS)) {
+    await loadPlanTilesetKind(tilesetId, "main");
+    await loadPlanTilesetKind(tilesetId, "walls");
+  }
+  for (const [key, dataUrl] of Object.entries(state.editor?.planTilesetSources || {})) {
+    const [tilesetId, kind] = key.split(":");
+    if (PLAN_TILESET_DEFS[tilesetId] && (kind === "main" || kind === "walls")) {
+      await registerPlanTilesetSource(tilesetId, kind, dataUrl, true);
+    }
+  }
+}
+
+async function loadPlanTilesetKind(tilesetId, kind) {
+  const def = PLAN_TILESET_DEFS[tilesetId];
+  const file = kind === "walls" ? def.wallFile : def.file;
+  const candidates = [file, `assets/biome/${file}`];
+  planTilesetStatus[`${tilesetId}:${kind}`] = { loaded: false, source: file, missing: true };
+  for (const candidate of candidates) {
+    const image = await loadOptionalImage(candidate);
+    if (!image) continue;
+    registerPlanTilesetImage(tilesetId, kind, image, candidate);
+    return true;
+  }
+  return false;
+}
+
+function loadOptionalImage(src) {
+  return new Promise(resolve => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+async function registerPlanTilesetSource(tilesetId, kind, src, persist = false) {
+  const image = await loadOptionalImage(src);
+  if (!image) {
+    planTilesetStatus[`${tilesetId}:${kind}`] = { loaded: false, source: src, missing: true };
+    return false;
+  }
+  registerPlanTilesetImage(tilesetId, kind, image, src);
+  if (persist) state.editor.planTilesetSources[`${tilesetId}:${kind}`] = src;
+  return true;
+}
+
+function registerPlanTilesetImage(tilesetId, kind, image, source) {
+  const atlasKey = `plan:${tilesetId}:${kind}`;
+  biomeAssets[atlasKey] = image;
+  planTilesetStatus[`${tilesetId}:${kind}`] = { loaded: true, source, missing: false };
+  const cols = 4;
+  const rows = 4;
+  const cellW = image.naturalWidth / cols;
+  const cellH = image.naturalHeight / rows;
+  const roleRows = PLAN_TILESET_ROLE_ROWS[kind] || PLAN_TILESET_ROLE_ROWS.main;
+  for (let row = 0; row < rows; row++) {
+    const role = roleRows[row] || "prop";
+    for (let col = 0; col < cols; col++) {
+      const index = row * cols + col;
+      const id = `plan_${tilesetId}_${kind}_${role}_${index}`;
+      biomeSprites[id] = {
+        id,
+        name: `${PLAN_TILESET_DEFS[tilesetId].label} ${role} ${index + 1}`,
+        kind: role === "house" ? "house" : role === "tower" ? "tower" : role === "building" ? "building" : role === "wall" ? "wall" : role === "grave" ? "grave" : "container",
+        planTileset: tilesetId,
+        planRole: role,
+        atlas: atlasKey,
+        approxRect: { x: col * cellW, y: row * cellH, w: cellW, h: cellH },
+        promptSummary: `${PLAN_TILESET_DEFS[tilesetId].label} plan-view ${role} sprite`
+      };
+    }
+  }
+}
+
 function applySpriteStyles() {
   document.querySelectorAll("[data-sprite]").forEach(el => {
     const id = el.dataset.sprite;
     const sprite = spriteLookup[id] || spriteLookup.redPotion;
     if (!sprite) return;
-    const scaleX = sprite.iconScaleX || sprite.iconScale || ATLAS_DISPLAY / ATLAS_SIZE;
-    const scaleY = sprite.iconScaleY || sprite.iconScale || ATLAS_DISPLAY / ATLAS_SIZE;
+    const spriteWidth = sprite.width || SPRITE_CELL;
+    const spriteHeight = sprite.height || SPRITE_CELL;
+    const targetSize = Number.parseFloat(getComputedStyle(el).getPropertyValue("--sprite-size")) || el.clientWidth || 56;
+    const scale = sprite.iconScale || targetSize / Math.max(spriteWidth, spriteHeight);
     const atlas = atlasDimensions[sprite.sheet] || atlasDimensions.items;
     el.style.setProperty("--sheet", `url("${atlasFiles[sprite.sheet]}")`);
-    el.style.setProperty("--x", `${-sprite.x * scaleX}px`);
-    el.style.setProperty("--y", `${-sprite.y * scaleY}px`);
-    el.style.backgroundSize = `${atlas.width * scaleX}px ${atlas.height * scaleY}px`;
+    el.style.setProperty("--x", `${-sprite.x * scale + (targetSize - spriteWidth * scale) / 2}px`);
+    el.style.setProperty("--y", `${-sprite.y * scale + (targetSize - spriteHeight * scale) / 2}px`);
+    el.style.backgroundSize = `${atlas.width * scale}px ${atlas.height * scale}px`;
   });
 }
 
@@ -664,7 +855,7 @@ function isDestructiblePropId(propId) {
 }
 
 function isDestroyedProp(propId, x, y) {
-  return isDestructiblePropId(propId) && Boolean(state.worldEdits[worldEditKey("prop", propWorldId(propId, x, y))]?.dead);
+  return Boolean(state.worldEdits[worldEditKey("prop", propWorldId(propId, x, y))]?.dead);
 }
 
 function getBiome(x, y) {
@@ -714,9 +905,9 @@ function pickForestClusterForTile(biome, x, y, water, road) {
 
 function pickPropForTile(biome, x, y) {
   const roll = hash2(x, y, WORLD_SEED + 31);
-  const forest = ["forest_ancient_dead_pine", "forest_twisted_green_black_tree", "forest_leafless_cursed_tree", "forest_thorn_bush", "forest_berry_bush", "forest_glowing_blue_mushrooms", "forest_mossy_boulder_cluster", "forest_fallen_log", "forest_dark_fern_cluster"];
-  const ruins = ["village_broken_wagon", "village_old_stone_well", "village_ruined_cottage_corner", "village_cracked_stone_altar", "village_stacked_crates", "village_barrels_cluster", "building_mossy_stone_foundation"];
-  const marsh = ["forest_hollow_log", "forest_moss_roots_patch", "forest_bramble_arch", "forest_red_cap_mushrooms", "forest_jagged_slate_rocks"];
+  const forest = ["forest_ancient_dead_pine", "forest_twisted_green_black_tree", "forest_leafless_cursed_tree", "forest_thorn_bush", "forest_berry_bush", "forest_wildflower_clump", "forest_glowing_blue_mushrooms", "forest_red_cap_mushrooms", "forest_mossy_boulder_cluster", "forest_jagged_slate_rocks", "forest_fallen_log", "forest_hollow_log", "forest_moss_roots_patch", "forest_bramble_arch", "forest_dark_fern_cluster", "rubble_fern_rock_cluster", "rubble_leafy_bramble_patch", "rubble2_thorny_bramble_thicket"];
+  const ruins = ["village_broken_wagon", "village_old_stone_well", "village_ruined_cottage_corner", "village_cracked_stone_altar", "village_stacked_crates", "village_barrels_cluster", "village2_broken_hay_wagon", "village2_hanging_cage_gibbet", "village2_hanging_cage_post", "village2_siege_ballista", "village3_collapsed_wagon_wreck", "village3_notice_board", "village3_blue_brazier_pedestal", "village3_spiked_wall_segment", "village3_palisade_stakes", "village3_graveyard_cluster", "village3_armory_supplies", "village3_treasure_supply_hoard", "building_mossy_stone_foundation", "rubble_mossy_low_wall", "rubble_loose_cobble_cluster", "rubble_gray_boulder_cluster", "rubble_jagged_rock_spire", "rubble2_large_boulder_cluster", "rubble2_mossy_rock_cluster", "rubble2_moss_covered_rocks"];
+  const marsh = ["forest_hollow_log", "forest_moss_roots_patch", "forest_bramble_arch", "forest_red_cap_mushrooms", "forest_jagged_slate_rocks", "rubble_stony_grass_patch", "rubble_dry_grass_patch", "rubble_overgrown_grass_mound", "rubble_dirt_path_patch", "rubble_tall_dry_grass_rocks", "rubble_leafy_ground_patch", "rubble2_sparse_dirt_grass_patch", "rubble2_dense_grass_patch", "rubble2_dry_scrub_patch", "rubble2_flowering_thistle_rocks", "rubble2_shrub_rock_patch", "rubble2_rocky_ground_patch"];
   const pool = biome === "ruins" ? ruins : biome === "marsh" ? marsh : forest;
   return pool[Math.floor(roll * pool.length) % pool.length];
 }
@@ -775,8 +966,8 @@ function seedChunkEntities(chunk) {
   const roll = hash2(cx, cy, WORLD_SEED + 41);
   if (distFromSpawn > 18 && roll > 0.78) {
     const assets = biome === "ruins"
-      ? ["building_ruined_chapel_wall", "building_collapsed_barn", "building_ruined_village_gate_arch"]
-      : ["building_small_hunter_cabin", "village_gloomy_woodland_hut", "building_ruined_blacksmith_shed"];
+      ? ["building_ruined_chapel_wall", "building_collapsed_barn", "building_ruined_village_gate_arch", "village2_ruined_gate_arch", "village2_barricaded_tower_gate", "village3_lit_crypt_door", "village3_barricaded_watchtower"]
+      : ["building_small_hunter_cabin", "village_gloomy_woodland_hut", "building_ruined_blacksmith_shed", "village2_alchemist_market_tent", "village2_thatched_livestock_shed", "village2_wooden_watchtower", "village3_blacksmith_forge_house", "village4_timber_cottage", "village4_round_thatched_hut", "village4_stone_chapel", "village4_bannered_guildhall"];
     const landmark = { id: `building-${cx}-${cy}`, name: biome === "ruins" ? "Village Ruin" : "Woodland Shelter", x: centerX - 1.5, y: centerY - 1.5, w: 3, h: 3, open: true, biomeAsset: assets[Math.floor(roll * assets.length) % assets.length] };
     chunk.buildings.push(landmark);
     if (hash2(cx, cy, WORLD_SEED + 211) < LANDMARK_ENEMY_CHANCE) {
@@ -1075,6 +1266,7 @@ function restoreSave() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) {
     normalizeHeroSkills();
+    normalizeEditorState();
     normalizeCamera();
     return;
   }
@@ -1085,6 +1277,7 @@ function restoreSave() {
     if (parsed.activeHeroId) state.activeHeroId = parsed.activeHeroId;
     if (parsed.worldEdits) state.worldEdits = parsed.worldEdits;
     if (Array.isArray(parsed.loot)) state.loot = parsed.loot;
+    if (parsed.editor) restoreEditorState(parsed.editor);
     if (parsed.camera) Object.assign(state.camera, parsed.camera);
     if (parsed.quest) Object.assign(state.quest, parsed.quest);
     if (typeof parsed.inside === "string" || parsed.inside === null) state.inside = parsed.inside;
@@ -1092,7 +1285,1364 @@ function restoreSave() {
     console.warn("Save restore failed.", error);
   }
   normalizeHeroSkills();
+  normalizeEditorState();
   normalizeCamera();
+}
+
+function restoreEditorState(editor) {
+  state.editor.scales = editor.scales && typeof editor.scales === "object" ? editor.scales : {};
+  state.editor.prefabs = Array.isArray(editor.prefabs) ? editor.prefabs : [];
+  state.editor.plans = Array.isArray(editor.plans) ? editor.plans : [];
+  state.editor.placements = Array.isArray(editor.placements) ? editor.placements : [];
+  state.editor.planTilesetSources = editor.planTilesetSources && typeof editor.planTilesetSources === "object" ? editor.planTilesetSources : {};
+  state.editor.activeLayer = normalizeEditorLayer(editor.activeLayer || "building");
+  state.editor.layerVisibility = { ...DEFAULT_EDITOR_LAYER_VISIBILITY, ...(editor.layerVisibility || {}) };
+  state.editor.lineCategory = editor.lineCategory || "village";
+  state.editor.lineShape = editor.lineShape || "straight";
+  state.editor.brushDensity = editor.brushDensity || 4;
+  state.editor.planView = Boolean(editor.planView);
+  state.editor.planDraft = editor.planDraft && typeof editor.planDraft === "object"
+    ? editor.planDraft
+    : { name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {} };
+  state.editor.planModal = editor.planModal && typeof editor.planModal === "object"
+    ? editor.planModal
+    : { x: null, y: null, width: 540, height: 620 };
+  state.editor.draft = editor.draft && typeof editor.draft === "object"
+    ? editor.draft
+    : { name: "New Set", occurrence: 4, items: [] };
+}
+
+function normalizeEditorLayer(layer) {
+  if (layer === "buildings") return "building";
+  if (layer === "overlay") return "vegetation";
+  return EDITOR_LAYERS.includes(layer) ? layer : "building";
+}
+
+function normalizeEditorItemLayers(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({ ...item, layer: normalizeEditorLayer(item.layer) }));
+}
+
+function normalizeEditorPrefabLayers() {
+  state.editor.draft.items = normalizeEditorItemLayers(state.editor.draft.items);
+  state.editor.prefabs = state.editor.prefabs.map(prefab => ({
+    ...prefab,
+    items: normalizeEditorItemLayers(prefab.items)
+  }));
+}
+
+function editorLayerVisible(layer) {
+  return state.editor.layerVisibility?.[normalizeEditorLayer(layer)] !== false;
+}
+
+function normalizeEditorState() {
+  state.editor.scales ||= {};
+  state.editor.prefabs = Array.isArray(state.editor.prefabs) ? state.editor.prefabs : [];
+  state.editor.plans = Array.isArray(state.editor.plans) ? state.editor.plans.map(normalizePlanSpawn).filter(Boolean) : [];
+  state.editor.placements = Array.isArray(state.editor.placements) ? state.editor.placements : [];
+  state.editor.planTilesetSources = state.editor.planTilesetSources && typeof state.editor.planTilesetSources === "object" ? state.editor.planTilesetSources : {};
+  state.editor.layerVisibility = { ...DEFAULT_EDITOR_LAYER_VISIBILITY, ...(state.editor.layerVisibility || {}) };
+  state.editor.draft ||= { name: "New Set", occurrence: 4, items: [] };
+  state.editor.draft.name ||= "New Set";
+  state.editor.draft.occurrence = clamp(Number(state.editor.draft.occurrence) || 4, 1, 10);
+  state.editor.draft.items = Array.isArray(state.editor.draft.items) ? state.editor.draft.items : [];
+  state.editor.draft.anchor = state.editor.draft.anchor && Number.isFinite(state.editor.draft.anchor.x) && Number.isFinite(state.editor.draft.anchor.y)
+    ? state.editor.draft.anchor
+    : null;
+  normalizeEditorPrefabLayers();
+  state.editor.activeLayer = normalizeEditorLayer(state.editor.activeLayer);
+  state.editor.open = false;
+  state.editor.selected = null;
+  state.editor.selectedDraftIndexes = [];
+  state.editor.movingDraftItem = null;
+  state.editor.placingPrefabId = null;
+  state.editor.lineMode = Boolean(state.editor.lineMode);
+  state.editor.planView = Boolean(state.editor.planView);
+  state.editor.planDraft = normalizePlanDraft(state.editor.planDraft);
+  state.editor.planModal = normalizePlanModal(state.editor.planModal);
+  state.editor.lineCategory = ["village", "ruins", "forest", "rubble", "biome", "mixed"].includes(state.editor.lineCategory) ? state.editor.lineCategory : "village";
+  state.editor.lineShape = ["straight", "curved", "circle", "wall"].includes(state.editor.lineShape) ? state.editor.lineShape : "straight";
+  state.editor.brushDensity = clamp(Number(state.editor.brushDensity) || 4, 1, 10);
+  state.editor.contextTarget = null;
+}
+
+function normalizePlanModal(modal = {}) {
+  return {
+    x: Number.isFinite(modal.x) ? modal.x : null,
+    y: Number.isFinite(modal.y) ? modal.y : null,
+    width: clamp(Number(modal.width) || 540, 360, 920),
+    height: clamp(Number(modal.height) || 620, 420, 860)
+  };
+}
+
+function normalizePlanDraft(plan = {}) {
+  const normalized = normalizePlanSpawn({
+    id: plan.id || "draft-plan",
+    name: plan.name || "New Plan",
+    occurrence: plan.occurrence || 4,
+    tileset: plan.tileset || "village",
+    width: plan.width || PLAN_GRID_SIZE,
+    height: plan.height || PLAN_GRID_SIZE,
+    activeBrush: plan.activeBrush || "wall",
+    cells: plan.cells || {}
+  }) || { id: "draft-plan", name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {} };
+  if (typeof plan.sourcePlanId === "string") normalized.sourcePlanId = plan.sourcePlanId;
+  if (plan.anchor && Number.isFinite(plan.anchor.x) && Number.isFinite(plan.anchor.y)) {
+    normalized.anchor = { x: plan.anchor.x, y: plan.anchor.y };
+  }
+  return normalized;
+}
+
+function normalizePlanSpawn(plan) {
+  if (!plan || typeof plan !== "object") return null;
+  const width = clamp(Math.round(Number(plan.width) || PLAN_GRID_SIZE), 4, 24);
+  const height = clamp(Math.round(Number(plan.height) || PLAN_GRID_SIZE), 4, 24);
+  const cells = {};
+  for (const [key, brush] of Object.entries(plan.cells || {})) {
+    if (!PLAN_BRUSH_BY_ID[brush] || brush === "erase") continue;
+    const [x, y] = key.split(",").map(Number);
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= width || y >= height) continue;
+    cells[`${x},${y}`] = brush;
+  }
+  return {
+    id: plan.id || `plan-${Date.now()}`,
+    name: String(plan.name || "Plan Spawn").slice(0, 32),
+    occurrence: clamp(Number(plan.occurrence) || 4, 1, 10),
+    tileset: PLAN_TILESET_DEFS[plan.tileset] ? plan.tileset : "village",
+    width,
+    height,
+    activeBrush: PLAN_BRUSH_BY_ID[plan.activeBrush] ? plan.activeBrush : "wall",
+    cells
+  };
+}
+
+function editorScaleKey(type, id) {
+  return `${type}:${id}`;
+}
+
+function editorScaleFor(type, id) {
+  const value = Number(state.editor?.scales?.[editorScaleKey(type, id)]);
+  return Number.isFinite(value) ? clamp(value, EDITOR_SCALE_MIN, EDITOR_SCALE_MAX) : 1;
+}
+
+function setEditorScale(type, id, scale) {
+  if (!type || !id) return;
+  state.editor.scales[editorScaleKey(type, id)] = clamp(Number(scale) || 1, EDITOR_SCALE_MIN, EDITOR_SCALE_MAX);
+  updateEditorSelectedUi();
+  saveGame(true);
+}
+
+function editorAssetName(asset) {
+  if (!asset) return "Unknown";
+  if (asset.type === "biome") return biomeSprites[asset.id]?.name || biomeSprites[asset.id]?.promptSummary?.split(",")[0] || asset.id.replaceAll("_", " ");
+  if (asset.type === "enemy") return enemyName(asset.id);
+  if (asset.type === "item") return itemName(asset.id);
+  if (asset.type === "forest") return "Forest cluster";
+  return asset.id;
+}
+
+function editorLayerDepth(layer) {
+  return { ground: -10000, building: 0, vegetation: 10000 }[normalizeEditorLayer(layer)] || 0;
+}
+
+function editorDrawThumb(canvasEl, asset) {
+  const thumb = canvasEl.getContext("2d");
+  const inset = 3;
+  const size = canvasEl.width - inset * 2;
+  thumb.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  thumb.fillStyle = "rgba(0,0,0,0.24)";
+  thumb.fillRect(0, 0, canvasEl.width, canvasEl.height);
+
+  if (asset.type === "biome") {
+    const sprite = biomeSprites[asset.id];
+    const image = sprite && biomeAssets[sprite.atlas];
+    if (image && !assetLoaded(image)) image.addEventListener("load", () => editorDrawThumb(canvasEl, asset), { once: true });
+    if (sprite && assetLoaded(image)) {
+      const r = sprite.approxRect;
+      drawImageContainedOn(thumb, image, r.x, r.y, r.w, r.h, inset, inset, size, size);
+      return;
+    }
+  } else if (asset.type === "enemy" || asset.type === "item") {
+    const sprite = spriteLookup[asset.id];
+    const image = sprite && images[sprite.sheet];
+    if (image && !assetLoaded(image)) image.addEventListener("load", () => editorDrawThumb(canvasEl, asset), { once: true });
+    if (sprite && assetLoaded(image)) {
+      drawImageContainedOn(thumb, image, sprite.x, sprite.y, sprite.width || SPRITE_CELL, sprite.height || SPRITE_CELL, inset, inset, size, size);
+      return;
+    }
+  } else if (asset.type === "forest" && assetLoaded(terrainAssets.forestClusters)) {
+    const image = terrainAssets.forestClusters;
+    drawImageContainedOn(thumb, image, 0, 0, image.naturalWidth / 4, image.naturalHeight / 4, inset, inset, size, size);
+    return;
+  } else if (asset.type === "forest" && terrainAssets.forestClusters) {
+    terrainAssets.forestClusters.addEventListener("load", () => editorDrawThumb(canvasEl, asset), { once: true });
+  }
+
+  thumb.fillStyle = "#f0c46a";
+  thumb.font = "bold 22px Georgia";
+  thumb.textAlign = "center";
+  thumb.fillText(asset.type[0]?.toUpperCase() || "?", canvasEl.width / 2, canvasEl.height / 2 + 8);
+}
+
+function editorPrefabById(id) {
+  return state.editor.prefabs.find(prefab => prefab.id === id);
+}
+
+function editorBiomeIdsBy(predicate) {
+  return Object.entries(biomeSprites)
+    .filter(([, sprite]) => predicate(sprite))
+    .map(([id]) => id);
+}
+
+function editorLineAssetPool(category = state.editor.lineCategory) {
+  if (category === "biome") {
+    const anchor = state.editor.draft.anchor || activeHero();
+    category = editorCategoryForBiome(anchor.x, anchor.y);
+  }
+  const villageKinds = ["building", "house", "shop", "tower", "church", "stable", "forge", "hut", "cabin", "barn", "well", "container", "wagon", "campfire", "signpost"];
+  const ruinKinds = ["ruin", "wall", "gate", "arch", "bridge", "shrine", "altar", "statue", "portal", "siege", "gibbet", "rubble"];
+  const forestKinds = ["tree", "bush", "flower", "mushroom", "fern", "foliage", "bramble", "log", "stump", "ground_prop"];
+  const rubbleKinds = ["rock", "boulder", "rubble", "ground_cover", "path", "road", "grass"];
+  const biome = kinds => editorBiomeIdsBy(sprite => kinds.includes(sprite.kind)).map(id => ({ type: "biome", id }));
+  const pools = {
+    village: biome(villageKinds),
+    ruins: biome(ruinKinds),
+    forest: [{ type: "forest", id: "cluster" }, ...biome(forestKinds)],
+    rubble: biome(rubbleKinds)
+  };
+  pools.mixed = [...pools.village, ...pools.ruins, ...pools.forest, ...pools.rubble];
+  return pools[category]?.length ? pools[category] : pools.mixed;
+}
+
+function editorCategoryForBiome(x, y) {
+  const biome = getBiome(x, y);
+  if (biome === "ruins") return "ruins";
+  if (biome === "marsh") return "rubble";
+  if (biome === "deepwood" || biome === "grove") return "forest";
+  return "mixed";
+}
+
+function editorLineSpacingFor(category = state.editor.lineCategory) {
+  const base = { village: 1.45, ruins: 1.15, forest: 0.92, rubble: 0.72, biome: 1.02, mixed: 1.05 }[category] || 1;
+  return base / Math.sqrt(clamp(Number(state.editor.brushDensity) || 4, 1, 10) / 4);
+}
+
+function editorLayerForAsset(asset) {
+  if (asset.type !== "biome") return asset.type === "forest" ? "vegetation" : normalizeEditorLayer(state.editor.activeLayer);
+  const kind = biomeSprites[asset.id]?.kind || "";
+  if (["ground_prop", "ground_cover", "path", "road", "grass", "flower", "fern", "mushroom", "foliage"].includes(kind)) return "ground";
+  if (["tree", "bramble", "log", "stump", "bush"].includes(kind)) return "vegetation";
+  return "building";
+}
+
+function editorVariationFor(x, y, index, strength = 1) {
+  const scaleRoll = hash2(Math.floor(x * 43) + index * 5, Math.floor(y * 43), WORLD_SEED + 1423);
+  const rotationRoll = hash2(Math.floor(x * 47), Math.floor(y * 47) + index * 11, WORLD_SEED + 1439);
+  return {
+    itemScale: 1 + (scaleRoll - 0.5) * 0.36 * strength,
+    rotation: (rotationRoll - 0.5) * 0.34 * strength
+  };
+}
+
+function editorCategoryKeepsVertical(category) {
+  return category === "village" || category === "ruins";
+}
+
+function editorAssetKeepsVertical(asset) {
+  if (!asset) return false;
+  if (asset.type === "forest") return false;
+  if (asset.type !== "biome") return true;
+  const kind = biomeSprites[asset.id]?.kind || "";
+  return ["building", "house", "shop", "tower", "church", "stable", "forge", "hut", "cabin", "barn", "well", "container", "wagon", "campfire", "signpost", "ruin", "wall", "gate", "arch", "bridge", "shrine", "altar", "statue", "portal", "siege", "gibbet"].includes(kind);
+}
+
+function editorVariationForAsset(asset, category, x, y, index, strength = 1) {
+  const variation = editorVariationFor(x, y, index, strength);
+  const resolvedCategory = category === "biome" ? editorCategoryForBiome(x, y) : category;
+  if (editorCategoryKeepsVertical(resolvedCategory) || editorAssetKeepsVertical(asset)) variation.rotation = 0;
+  return variation;
+}
+
+function wallRoleForSprite(id) {
+  const sprite = biomeSprites[id];
+  if (sprite?.wallRole) return sprite.wallRole;
+  if (id === WALL_SPRITES.segment) return "segment";
+  if (id === WALL_SPRITES.gate) return "gate";
+  return null;
+}
+
+function isWallEditorItem(item) {
+  if (!item || item.type !== "biome") return false;
+  const kind = biomeSprites[item.id]?.kind;
+  return Boolean(item.wallGroupId) && (kind === "wall" || kind === "gate" || wallRoleForSprite(item.id));
+}
+
+function editorWallGroupIndexes(groupId) {
+  if (!groupId) return [];
+  return state.editor.draft.items
+    .map((item, index) => isWallEditorItem(item) && item.wallGroupId === groupId ? index : -1)
+    .filter(index => index >= 0);
+}
+
+function editorWallSideIndexes(groupId, wallSide) {
+  if (!groupId || !wallSide) return [];
+  return state.editor.draft.items
+    .map((item, index) => isWallEditorItem(item) && item.wallGroupId === groupId && item.wallSide === wallSide ? index : -1)
+    .filter(index => index >= 0);
+}
+
+function wallVariantIdsForItem(item) {
+  if (item?.wallSide === "front" || item?.wallSide === "gate") return [WALL_SPRITES.segment, WALL_SPRITES.gate];
+  return item?.id === WALL_SPRITES.gate ? [WALL_SPRITES.segment, WALL_SPRITES.gate] : [WALL_SPRITES.segment];
+}
+
+function wallSelectionIndexes(target = state.editor.selected) {
+  const selected = [...new Set(state.editor.selectedDraftIndexes || [])]
+    .filter(index => isWallEditorItem(state.editor.draft.items[index]));
+  if (selected.length) return selected;
+  if (Number.isInteger(target?.draftIndex) && isWallEditorItem(state.editor.draft.items[target.draftIndex])) return [target.draftIndex];
+  return [];
+}
+
+function cycleWallVariantIndexes(indexes, direction = 1) {
+  const targets = [...new Set(indexes)].filter(index => isWallEditorItem(state.editor.draft.items[index]));
+  if (!targets.length) return false;
+  if (targets.length > 1) return false;
+  for (const index of targets) {
+    const item = state.editor.draft.items[index];
+    const variants = wallVariantIdsForItem(item);
+    if (variants.length < 2) continue;
+    const current = Math.max(0, variants.indexOf(item.id));
+    const nextId = variants[(current + direction + variants.length) % variants.length];
+    item.id = nextId;
+    item.wallRole = wallRoleForSprite(item.id) || item.wallRole;
+    if (nextId === WALL_SPRITES.gate) {
+      item.wallSide = "gate";
+      item.itemScale = item.itemScale || 1;
+      item.flipX = false;
+    } else if (item.wallSide === "gate") {
+      item.wallSide = "front";
+      item.itemScale = item.itemScale || 1;
+      item.flipX = false;
+    }
+  }
+  renderEditorDraft();
+  updateEditorSelectedUi();
+  saveGame(true);
+  return true;
+}
+
+function selectWallGroupFromTarget(target = state.editor.contextTarget || state.editor.selected) {
+  const item = Number.isInteger(target?.draftIndex) ? state.editor.draft.items[target.draftIndex] : null;
+  if (!isWallEditorItem(item)) return false;
+  const indexes = editorWallGroupIndexes(item.wallGroupId);
+  state.editor.selectedDraftIndexes = indexes;
+  state.editor.selected = indexes.length === 1 ? editorDraftSelection(indexes[0]) : null;
+  updateEditorSelectedUi();
+  hideEditorContextMenu();
+  toast(`Selected wall group (${indexes.length} pieces).`);
+  return true;
+}
+
+function selectWallSideFromTarget(target = state.editor.contextTarget || state.editor.selected) {
+  const item = Number.isInteger(target?.draftIndex) ? state.editor.draft.items[target.draftIndex] : null;
+  if (!isWallEditorItem(item)) return false;
+  const indexes = editorWallSideIndexes(item.wallGroupId, item.wallSide);
+  state.editor.selectedDraftIndexes = indexes;
+  state.editor.selected = indexes.length === 1 ? editorDraftSelection(indexes[0]) : null;
+  updateEditorSelectedUi();
+  hideEditorContextMenu();
+  toast(`Selected ${item.wallSide} wall run (${indexes.length} pieces).`);
+  return true;
+}
+
+function cycleWallTarget(target = state.editor.contextTarget || state.editor.selected, direction = 1) {
+  const indexes = Number.isInteger(target?.draftIndex) && isWallEditorItem(state.editor.draft.items[target.draftIndex])
+    ? [target.draftIndex]
+    : wallSelectionIndexes(target);
+  if (!indexes.length) return false;
+  const ok = cycleWallVariantIndexes(indexes, direction);
+  if (ok) toast(`Swapped ${indexes.length} wall tile${indexes.length === 1 ? "" : "s"}.`);
+  return ok;
+}
+
+function wallGroupBounds(groupId) {
+  const anchor = state.editor.draft.anchor;
+  const indexes = editorWallGroupIndexes(groupId);
+  if (!anchor || !indexes.length) return null;
+  return indexes.reduce((bounds, index) => {
+    const item = state.editor.draft.items[index];
+    const x = Math.round(anchor.x + (item.dx || 0));
+    const y = Math.round(anchor.y + (item.dy || 0));
+    return {
+      minX: Math.min(bounds.minX, x),
+      maxX: Math.max(bounds.maxX, x),
+      minY: Math.min(bounds.minY, y),
+      maxY: Math.max(bounds.maxY, y)
+    };
+  }, { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+}
+
+function wallGroupSpacing(groupId) {
+  const index = editorWallGroupIndexes(groupId)[0];
+  const spacing = Number(state.editor.draft.items[index]?.wallSpacing);
+  return clamp(Number.isFinite(spacing) ? Math.round(spacing) : 1, 1, 6);
+}
+
+function wallGroupScale(groupId) {
+  const index = editorWallGroupIndexes(groupId)[0];
+  const scale = Number(state.editor.draft.items[index]?.itemScale);
+  return Number.isFinite(scale) ? clamp(scale, EDITOR_SCALE_MIN, EDITOR_SCALE_MAX) : 1;
+}
+
+function replaceWallGroup(groupId, bounds, spacing = wallGroupSpacing(groupId)) {
+  const anchor = state.editor.draft.anchor;
+  const indexes = editorWallGroupIndexes(groupId);
+  if (!anchor || !indexes.length) return false;
+  const wallSpacing = clamp(Math.round(spacing) || 1, 1, 6);
+  const groupScale = wallGroupScale(groupId);
+  const items = editorWallItemsForRect({ x: bounds.minX, y: bounds.minY }, { x: bounds.maxX, y: bounds.maxY }, wallSpacing);
+  const insertAt = Math.min(...indexes);
+  indexes.sort((a, b) => b - a).forEach(index => state.editor.draft.items.splice(index, 1));
+  const nextItems = items.map(item => ({
+    type: item.asset.type,
+    id: item.asset.id,
+    layer: normalizeEditorLayer(item.layer),
+    dx: item.point.x - anchor.x,
+    dy: item.point.y - anchor.y,
+    itemScale: groupScale,
+    rotation: item.rotation,
+    flipX: item.flipX,
+    wallGroupId: groupId,
+    wallSide: item.wallSide,
+    wallRole: item.wallRole,
+    wallSpacing
+  }));
+  state.editor.draft.items.splice(insertAt, 0, ...nextItems);
+  state.editor.selectedDraftIndexes = nextItems.map((_, offset) => insertAt + offset);
+  state.editor.selected = null;
+  renderEditorDraft();
+  updateEditorSelectedUi();
+  saveGame(true);
+  return true;
+}
+
+function resizeWallGroup(groupId, direction) {
+  const bounds = wallGroupBounds(groupId);
+  if (!bounds) return false;
+  const grow = direction > 0;
+  const next = grow
+    ? { minX: bounds.minX - 1, maxX: bounds.maxX + 1, minY: bounds.minY - 1, maxY: bounds.maxY + 1 }
+    : { minX: bounds.minX + 1, maxX: bounds.maxX - 1, minY: bounds.minY + 1, maxY: bounds.maxY - 1 };
+  if (next.maxX - next.minX < 2 || next.maxY - next.minY < 2) {
+    toast("Wall is already at minimum size.");
+    return true;
+  }
+  return replaceWallGroup(groupId, next);
+}
+
+function adjustWallGroupSpacing(groupId, direction) {
+  const bounds = wallGroupBounds(groupId);
+  if (!bounds) return false;
+  const current = wallGroupSpacing(groupId);
+  const next = clamp(current + direction, 1, 6);
+  if (next === current) {
+    toast(direction > 0 ? "Wall spacing is already at maximum." : "Wall spacing is already one tile.");
+    return true;
+  }
+  return replaceWallGroup(groupId, bounds, next);
+}
+
+function activeWallGroupId() {
+  const indexes = wallSelectionIndexes();
+  if (indexes.length) return state.editor.draft.items[indexes[0]]?.wallGroupId || null;
+  const selectedIndex = state.editor.selected?.draftIndex;
+  if (Number.isInteger(selectedIndex) && isWallEditorItem(state.editor.draft.items[selectedIndex])) {
+    return state.editor.draft.items[selectedIndex].wallGroupId;
+  }
+  return null;
+}
+
+function resizeWallGroupFromMenu(target = state.editor.contextTarget || state.editor.selected) {
+  const item = Number.isInteger(target?.draftIndex) ? state.editor.draft.items[target.draftIndex] : null;
+  if (!isWallEditorItem(item)) return false;
+  const current = wallGroupScale(item.wallGroupId);
+  const raw = window.prompt("Wall group scale", current.toFixed(2));
+  if (raw === null) return false;
+  const scale = clamp(Number(raw) || current, EDITOR_SCALE_MIN, EDITOR_SCALE_MAX);
+  const indexes = editorWallGroupIndexes(item.wallGroupId);
+  for (const index of indexes) {
+    state.editor.draft.items[index].itemScale = scale;
+  }
+  state.editor.selectedDraftIndexes = indexes;
+  state.editor.selected = null;
+  renderEditorDraft();
+  updateEditorSelectedUi();
+  saveGame(true);
+  hideEditorContextMenu();
+  toast(`Wall group scale set to ${scale.toFixed(2)}.`);
+  return true;
+}
+
+function randomLineAsset(category, x, y, index) {
+  const pool = editorLineAssetPool(category);
+  const roll = hash2(Math.floor(x * 17) + index * 13, Math.floor(y * 17) - index * 7, WORLD_SEED + 1301 + category.length * 19);
+  return pool[Math.floor(roll * pool.length) % pool.length];
+}
+
+function createEditorAssetList() {
+  const biome = Object.keys(biomeSprites).map(id => ({ type: "biome", id }));
+  const enemies = [...new Set([...commonEnemyTypes, "skeleton", "cultist", "emberImp", "frostAcolyte", "goblinRaider", "beastWolf", "swampHag", "cyclops", "goblinEmperor"])]
+    .map(id => ({ type: "enemy", id }));
+  const items = Object.keys(itemInfo).map(id => ({ type: "item", id }));
+  return [{ type: "forest", id: "cluster" }, ...biome, ...enemies, ...items];
+}
+
+function renderEditorPanel() {
+  const panel = document.getElementById("editorPanel");
+  if (!panel) return;
+  panel.classList.toggle("collapsed", !state.editor.open);
+  panel.classList.toggle("plan-view-active", state.editor.planView);
+  renderEditorPalette();
+  renderEditorDraft();
+  renderEditorPlanTools();
+  renderSavedPrefabs();
+  updateEditorSelectedUi();
+}
+
+function renderEditorPalette() {
+  const palette = document.getElementById("editorPalette");
+  if (!palette) return;
+  palette.innerHTML = "";
+  for (const asset of createEditorAssetList()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "editor-asset";
+    button.draggable = true;
+    const thumb = document.createElement("canvas");
+    thumb.width = 58;
+    thumb.height = 58;
+    const label = document.createElement("span");
+    label.textContent = editorAssetName(asset);
+    button.append(thumb, label);
+    editorDrawThumb(thumb, asset);
+    button.title = `${asset.type}: ${asset.id}`;
+    button.addEventListener("dragstart", event => {
+      event.dataTransfer.setData("application/json", JSON.stringify(asset));
+      event.dataTransfer.effectAllowed = "copy";
+    });
+    button.addEventListener("click", () => addAssetToDraft(asset));
+    palette.appendChild(button);
+  }
+}
+
+function renderEditorDraft() {
+  const name = document.getElementById("editorPrefabName");
+  const occurrence = document.getElementById("editorOccurrence");
+  const occurrenceValue = document.getElementById("editorOccurrenceValue");
+  const list = document.getElementById("editorDraftItems");
+  if (!list) return;
+  const activeDraft = state.editor.planView ? state.editor.planDraft : state.editor.draft;
+  if (name) name.value = activeDraft.name;
+  if (occurrence) occurrence.value = activeDraft.occurrence;
+  if (occurrenceValue) occurrenceValue.textContent = activeDraft.occurrence;
+  const layer = document.getElementById("editorLayer");
+  if (layer) layer.value = state.editor.activeLayer;
+  document.querySelectorAll("[data-editor-layer-visible]").forEach(input => {
+    input.checked = editorLayerVisible(input.dataset.editorLayerVisible);
+  });
+  list.innerHTML = "";
+  if (state.editor.planView) {
+    const plan = state.editor.planDraft;
+    const row = document.createElement("span");
+    row.innerHTML = `<b>${Object.keys(plan.cells).length} painted cells - ${PLAN_TILESET_DEFS[plan.tileset].label}</b><button type="button" title="Clear">X</button>`;
+    row.querySelector("button").addEventListener("click", clearEditorPlanDraft);
+    list.appendChild(row);
+    return;
+  }
+  state.editor.draft.items.forEach((item, index) => {
+    const row = document.createElement("span");
+    const itemLayer = normalizeEditorLayer(item.layer);
+    row.classList.toggle("layer-hidden", !editorLayerVisible(itemLayer));
+    const groupLabel = isWallEditorItem(item) ? ` - ${item.wallSide || "wall"}` : "";
+    row.innerHTML = `<b>${editorAssetName(item)}${groupLabel} - ${itemLayer}</b><button type="button" title="Remove">X</button>`;
+    row.querySelector("button").addEventListener("click", () => {
+      removeDraftItems([index]);
+    });
+    list.appendChild(row);
+  });
+}
+
+function renderSavedPrefabs() {
+  const list = document.getElementById("savedPrefabs");
+  if (!list) return;
+  list.innerHTML = "";
+  for (const plan of state.editor.plans) {
+    const row = document.createElement("div");
+    row.className = "prefab-row plan-row";
+    row.innerHTML = `<span>${plan.name} plan (${PLAN_TILESET_DEFS[plan.tileset].label}, ${plan.occurrence}/10)</span><button type="button">Load</button>`;
+    row.querySelector("button").addEventListener("click", () => loadPlanIntoDraft(plan.id));
+    row.addEventListener("click", event => {
+      if (event.target.tagName === "BUTTON") return;
+      loadPlanIntoDraft(plan.id);
+    });
+    list.appendChild(row);
+  }
+  for (const prefab of state.editor.prefabs) {
+    const row = document.createElement("div");
+    row.className = "prefab-row";
+    row.innerHTML = `<span>${prefab.name} (${prefab.occurrence}/10)</span><button type="button">Place</button>`;
+    row.querySelector("button").addEventListener("click", () => {
+      state.editor.placingPrefabId = prefab.id;
+      toast(`Click the map to place ${prefab.name}.`);
+    });
+    row.addEventListener("click", event => {
+      if (event.target.tagName === "BUTTON") return;
+      loadPrefabIntoDraft(prefab.id);
+    });
+    list.appendChild(row);
+  }
+}
+
+function renderEditorPlanTools() {
+  const tools = document.getElementById("editorPlanTools");
+  if (!tools) return;
+  tools.hidden = !state.editor.planView;
+  const modal = document.getElementById("editorPlanModal");
+  if (modal) {
+    modal.hidden = !state.editor.planView;
+    if (state.editor.planView) applyPlanModalLayout();
+  }
+  const toggle = document.getElementById("editorPlanViewToggle");
+  if (toggle) {
+    toggle.classList.toggle("active", state.editor.planView);
+    toggle.setAttribute("aria-pressed", state.editor.planView ? "true" : "false");
+    toggle.textContent = state.editor.planView ? "Plan View On" : "Plan View";
+  }
+  const tileset = document.getElementById("editorPlanTileset");
+  if (tileset) tileset.value = state.editor.planDraft.tileset;
+  const widthInput = document.getElementById("editorPlanWidth");
+  const heightInput = document.getElementById("editorPlanHeight");
+  if (widthInput) widthInput.value = state.editor.planDraft.width;
+  if (heightInput) heightInput.value = state.editor.planDraft.height;
+  const brushGrid = document.getElementById("editorPlanBrushes");
+  if (brushGrid) {
+    brushGrid.innerHTML = "";
+    for (const brush of PLAN_BRUSHES) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "plan-brush";
+      button.classList.toggle("active", state.editor.planDraft.activeBrush === brush.id);
+      button.style.setProperty("--brush-color", brush.color);
+      button.textContent = brush.label;
+      button.addEventListener("click", () => {
+        state.editor.planDraft.activeBrush = brush.id;
+        renderEditorPlanTools();
+      });
+      brushGrid.appendChild(button);
+    }
+  }
+  drawPlanCanvas();
+  renderSavedPlanViews();
+  updatePlanLoadSelect();
+  updatePlanTilesetStatus();
+}
+
+function applyPlanModalLayout() {
+  const modal = document.getElementById("editorPlanModal");
+  if (!modal) return;
+  const next = normalizePlanModal(state.editor.planModal);
+  if (!Number.isFinite(next.x) || !Number.isFinite(next.y)) {
+    next.x = Math.max(14, Math.round((window.innerWidth - next.width) / 2));
+    next.y = Math.max(14, Math.round((window.innerHeight - next.height) / 2));
+  }
+  next.x = clamp(next.x, 8, Math.max(8, window.innerWidth - 80));
+  next.y = clamp(next.y, 8, Math.max(8, window.innerHeight - 80));
+  state.editor.planModal = next;
+  modal.style.left = `${next.x}px`;
+  modal.style.top = `${next.y}px`;
+  modal.style.width = `${next.width}px`;
+  modal.style.height = `${next.height}px`;
+}
+
+function syncPlanModalSize() {
+  const modal = document.getElementById("editorPlanModal");
+  if (!modal || modal.hidden) return;
+  const rect = modal.getBoundingClientRect();
+  state.editor.planModal = normalizePlanModal({
+    ...state.editor.planModal,
+    width: rect.width,
+    height: rect.height
+  });
+}
+
+function renderSavedPlanViews() {
+  const list = document.getElementById("savedPlanViews");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!state.editor.plans.length) {
+    const empty = document.createElement("div");
+    empty.className = "plan-row";
+    empty.textContent = "No saved plans yet.";
+    list.appendChild(empty);
+    return;
+  }
+  for (const plan of state.editor.plans) {
+    const row = document.createElement("div");
+    row.className = "plan-row";
+    row.innerHTML = `<span>${plan.name} (${plan.width}x${plan.height}, ${PLAN_TILESET_DEFS[plan.tileset].label})</span><button type="button">Load</button>`;
+    row.querySelector("button").addEventListener("click", () => loadPlanIntoDraft(plan.id));
+    row.addEventListener("click", event => {
+      if (event.target.tagName === "BUTTON") return;
+      loadPlanIntoDraft(plan.id);
+    });
+    list.appendChild(row);
+  }
+}
+
+function updatePlanLoadSelect() {
+  const select = document.getElementById("editorPlanLoadSelect");
+  if (!select) return;
+  select.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = state.editor.plans.length ? "Load saved plan" : "No saved plans";
+  select.appendChild(empty);
+  for (const plan of state.editor.plans) {
+    const option = document.createElement("option");
+    option.value = plan.id;
+    option.textContent = `${plan.name} (${plan.width}x${plan.height})`;
+    select.appendChild(option);
+  }
+  select.value = state.editor.planDraft.sourcePlanId || "";
+}
+
+function updatePlanTilesetStatus() {
+  const status = document.getElementById("editorPlanStatus");
+  if (!status) return;
+  const tilesetId = state.editor.planDraft.tileset;
+  const main = planTilesetStatus[`${tilesetId}:main`];
+  const walls = planTilesetStatus[`${tilesetId}:walls`];
+  const missing = [];
+  if (!main?.loaded) missing.push(PLAN_TILESET_DEFS[tilesetId].file);
+  if (!walls?.loaded) missing.push(PLAN_TILESET_DEFS[tilesetId].wallFile);
+  status.textContent = missing.length
+    ? `Missing ${missing.join(" and ")}. Assign image${missing.length > 1 ? "s" : ""} to use custom ${PLAN_TILESET_DEFS[tilesetId].label} art.`
+    : `${PLAN_TILESET_DEFS[tilesetId].label} images loaded. Click the map to place the center marker; right-click grid cells to erase.`;
+}
+
+function drawPlanCanvas() {
+  const canvasEl = document.getElementById("editorPlanCanvas");
+  if (!canvasEl) return;
+  const plan = state.editor.planDraft;
+  const rect = canvasEl.getBoundingClientRect();
+  const dpr = Math.max(1, Math.min(devicePixelRatio || 1, 2));
+  const pixelWidth = Math.max(240, Math.floor(rect.width * dpr));
+  const pixelHeight = Math.max(240, Math.floor(rect.height * dpr));
+  if (canvasEl.width !== pixelWidth || canvasEl.height !== pixelHeight) {
+    canvasEl.width = pixelWidth;
+    canvasEl.height = pixelHeight;
+  }
+  const planCtx = canvasEl.getContext("2d");
+  const cellW = canvasEl.width / plan.width;
+  const cellH = canvasEl.height / plan.height;
+  planCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  planCtx.fillStyle = "#0b0908";
+  planCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+  for (const [key, brushId] of Object.entries(plan.cells)) {
+    const brush = PLAN_BRUSH_BY_ID[brushId];
+    if (!brush) continue;
+    const [x, y] = key.split(",").map(Number);
+    planCtx.fillStyle = brush.color;
+    planCtx.fillRect(x * cellW + 1, y * cellH + 1, cellW - 2, cellH - 2);
+  }
+  planCtx.strokeStyle = "rgba(217, 154, 66, 0.22)";
+  planCtx.lineWidth = 1;
+  for (let x = 0; x <= plan.width; x++) {
+    planCtx.beginPath();
+    planCtx.moveTo(Math.round(x * cellW) + 0.5, 0);
+    planCtx.lineTo(Math.round(x * cellW) + 0.5, canvasEl.height);
+    planCtx.stroke();
+  }
+  for (let y = 0; y <= plan.height; y++) {
+    planCtx.beginPath();
+    planCtx.moveTo(0, Math.round(y * cellH) + 0.5);
+    planCtx.lineTo(canvasEl.width, Math.round(y * cellH) + 0.5);
+    planCtx.stroke();
+  }
+}
+
+function applyPlanGridSize() {
+  const widthInput = document.getElementById("editorPlanWidth");
+  const heightInput = document.getElementById("editorPlanHeight");
+  const width = clamp(Math.round(Number(widthInput?.value) || state.editor.planDraft.width), 4, 24);
+  const height = clamp(Math.round(Number(heightInput?.value) || state.editor.planDraft.height), 4, 24);
+  resizePlanDraftGrid(width, height);
+}
+
+function resizePlanDraftGrid(width, height) {
+  const plan = state.editor.planDraft;
+  const cells = {};
+  for (const [key, brush] of Object.entries(plan.cells || {})) {
+    const [x, y] = key.split(",").map(Number);
+    if (Number.isInteger(x) && Number.isInteger(y) && x < width && y < height) cells[key] = brush;
+  }
+  plan.width = width;
+  plan.height = height;
+  plan.cells = cells;
+  renderEditorDraft();
+  renderEditorPlanTools();
+  saveGame(true);
+}
+
+function drawPlanViewMarker() {
+  const anchor = state.editor.planDraft?.anchor;
+  if (!anchor) return;
+  const p = worldToScreen(anchor.x, anchor.y);
+  const z = state.camera.zoom;
+  const radius = Math.max(7, 13 * z);
+  ctx.save();
+  ctx.strokeStyle = "rgba(123, 223, 242, 0.95)";
+  ctx.fillStyle = "rgba(123, 223, 242, 0.18)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(p.x - radius - 7, p.y);
+  ctx.lineTo(p.x + radius + 7, p.y);
+  ctx.moveTo(p.x, p.y - radius - 7);
+  ctx.lineTo(p.x, p.y + radius + 7);
+  ctx.stroke();
+  const plan = state.editor.planDraft;
+  const w = plan.width * 0.96;
+  const h = plan.height * 0.96;
+  const a = worldToScreen(anchor.x - w / 2, anchor.y - h / 2);
+  const b = worldToScreen(anchor.x + w / 2, anchor.y - h / 2);
+  const c = worldToScreen(anchor.x + w / 2, anchor.y + h / 2);
+  const d = worldToScreen(anchor.x - w / 2, anchor.y + h / 2);
+  ctx.setLineDash([6, 5]);
+  ctx.strokeStyle = "rgba(240, 196, 106, 0.82)";
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.lineTo(c.x, c.y);
+  ctx.lineTo(d.x, d.y);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function updateEditorSelectedUi() {
+  const label = document.getElementById("editorSelectedName");
+  const input = document.getElementById("editorScaleInput");
+  const lineButton = document.getElementById("editorLineModeToggle");
+  const planButton = document.getElementById("editorPlanViewToggle");
+  const lineCategory = document.getElementById("editorLineCategory");
+  const lineShape = document.getElementById("editorLineShape");
+  const brushDensity = document.getElementById("editorBrushDensity");
+  const brushDensityValue = document.getElementById("editorBrushDensityValue");
+  const lineStatus = document.getElementById("editorLineStatus");
+  const selected = state.editor.selected;
+  if (lineButton) {
+    lineButton.classList.toggle("active", state.editor.lineMode);
+    lineButton.setAttribute("aria-pressed", state.editor.lineMode ? "true" : "false");
+    lineButton.textContent = state.editor.lineMode ? "Line Mode On" : "Line Mode";
+  }
+  if (planButton) {
+    planButton.classList.toggle("active", state.editor.planView);
+    planButton.setAttribute("aria-pressed", state.editor.planView ? "true" : "false");
+    planButton.textContent = state.editor.planView ? "Plan View On" : "Plan View";
+  }
+  if (lineCategory) lineCategory.value = state.editor.lineCategory;
+  if (lineShape) lineShape.value = state.editor.lineShape;
+  if (brushDensity) brushDensity.value = state.editor.brushDensity;
+  if (brushDensityValue) brushDensityValue.textContent = state.editor.brushDensity;
+  if (lineStatus) {
+    const pool = editorLineAssetPool(state.editor.lineCategory);
+    lineStatus.textContent = state.editor.lineMode
+      ? state.editor.lineShape === "wall"
+        ? "Drag a wall footprint. Corners, straight walls, and one front gate are placed on the building layer."
+        : `Draw ${state.editor.lineShape} ${state.editor.lineCategory} paths at density ${state.editor.brushDensity} (${pool.length} choices).`
+      : "Line mode off. Select items or drag from the palette.";
+  }
+  if (!label || !input) return;
+  if (state.editor.planView) {
+    label.textContent = state.editor.planDraft.anchor ? "Plan marker placed - painting updates map" : "Click map to place plan center marker";
+    input.value = "1";
+    return;
+  }
+  const selectedDraftIndexes = state.editor.selectedDraftIndexes || [];
+  if (selectedDraftIndexes.length > 1) {
+    const wallItems = selectedDraftIndexes.map(index => state.editor.draft.items[index]).filter(isWallEditorItem);
+    if (wallItems.length === selectedDraftIndexes.length) {
+      const groupCount = new Set(wallItems.map(item => item.wallGroupId)).size;
+      const sideCount = new Set(wallItems.map(item => item.wallSide)).size;
+      label.textContent = sideCount === 1 && groupCount === 1
+        ? `${wallItems[0].wallSide} wall run (${selectedDraftIndexes.length})`
+        : `Wall group (${selectedDraftIndexes.length} pieces)`;
+    } else {
+      label.textContent = `${selectedDraftIndexes.length} items selected`;
+    }
+    input.value = "1";
+    return;
+  }
+  if (!selected) {
+    label.textContent = state.editor.placingPrefabId ? "Click map to place set" : "Select an object on the map";
+    input.value = "1";
+    return;
+  }
+  label.textContent = `${editorAssetName(selected)} (${selected.type})`;
+  input.value = editorScaleFor(selected.type, selected.id).toFixed(2);
+  const layer = document.getElementById("editorLayer");
+  if (layer && Number.isInteger(selected.draftIndex)) {
+    layer.value = normalizeEditorLayer(state.editor.draft.items[selected.draftIndex]?.layer || state.editor.activeLayer);
+  }
+}
+
+function addAssetToDraft(asset, world = null, options = {}) {
+  if (!asset) return;
+  if (world && !state.editor.draft.anchor) {
+    state.editor.draft.anchor = { x: world.x, y: world.y };
+  }
+  const anchor = state.editor.draft.anchor;
+  const count = state.editor.draft.items.length;
+  const angle = count * 2.399;
+  const radius = 0.35 + Math.floor(count / 4) * 0.35;
+  state.editor.draft.items.push({
+    type: asset.type,
+    id: asset.id,
+    layer: normalizeEditorLayer(options.layer || state.editor.activeLayer),
+    dx: world && anchor ? world.x - anchor.x : Math.cos(angle) * radius,
+    dy: world && anchor ? world.y - anchor.y : Math.sin(angle) * radius,
+    itemScale: options.itemScale,
+    rotation: options.rotation,
+    flipX: Boolean(options.flipX),
+    wallGroupId: options.wallGroupId,
+    wallSide: options.wallSide,
+    wallRole: options.wallRole,
+    wallSpacing: options.wallSpacing
+  });
+  if (options.render !== false) renderEditorDraft();
+}
+
+function removeDraftItems(indexes) {
+  const unique = [...new Set(indexes)].filter(index => Number.isInteger(index) && state.editor.draft.items[index]);
+  if (!unique.length) return false;
+  unique.sort((a, b) => b - a).forEach(index => state.editor.draft.items.splice(index, 1));
+  state.editor.selected = null;
+  state.editor.selectedDraftIndexes = [];
+  renderEditorDraft();
+  updateEditorSelectedUi();
+  saveGame(true);
+  return true;
+}
+
+function saveCurrentPrefab() {
+  const draft = state.editor.draft;
+  if (!draft.items.length) {
+    toast("Drop assets into the set first.");
+    return;
+  }
+  const prefab = {
+    id: `prefab-${Date.now()}`,
+    name: draft.name?.trim() || "Prefab Set",
+    occurrence: clamp(Number(draft.occurrence) || 4, 1, 10),
+    items: draft.items.map(item => ({ ...item }))
+  };
+  state.editor.prefabs.push(prefab);
+  saveGame(true);
+  renderSavedPrefabs();
+  toast(`${prefab.name} saved.`);
+}
+
+function saveSelectionPrefab() {
+  const draft = state.editor.draft;
+  const selectedIndexes = [...new Set(state.editor.selectedDraftIndexes || [])]
+    .filter(index => Number.isInteger(index) && draft.items[index]);
+  if (!selectedIndexes.length && Number.isInteger(state.editor.selected?.draftIndex) && draft.items[state.editor.selected.draftIndex]) {
+    selectedIndexes.push(state.editor.selected.draftIndex);
+  }
+  if (!selectedIndexes.length || !draft.anchor) {
+    toast("Select items with the rectangle first.");
+    return;
+  }
+
+  const selectedItems = selectedIndexes.map(index => {
+    const item = draft.items[index];
+    return {
+      item,
+      x: draft.anchor.x + (item.dx || 0),
+      y: draft.anchor.y + (item.dy || 0)
+    };
+  });
+  const center = selectedItems.reduce((sum, entry) => ({
+    x: sum.x + entry.x / selectedItems.length,
+    y: sum.y + entry.y / selectedItems.length
+  }), { x: 0, y: 0 });
+  const prefab = {
+    id: `prefab-${Date.now()}`,
+    name: draft.name?.trim() || "Selection Set",
+    occurrence: clamp(Number(draft.occurrence) || 4, 1, 10),
+    items: selectedItems.map(entry => ({
+      ...entry.item,
+      dx: entry.x - center.x,
+      dy: entry.y - center.y
+    }))
+  };
+  state.editor.prefabs.push(prefab);
+  saveGame(true);
+  renderSavedPrefabs();
+  toast(`${prefab.name} saved from selection.`);
+}
+
+function loadPrefabIntoDraft(id) {
+  const prefab = editorPrefabById(id);
+  if (!prefab) return;
+  const hero = activeHero();
+  state.editor.draft = {
+    name: prefab.name,
+    occurrence: prefab.occurrence,
+    anchor: { x: hero.x + 1.8, y: hero.y + 1.8 },
+    items: prefab.items.map(item => ({ ...item }))
+  };
+  state.editor.selected = null;
+  state.editor.selectedDraftIndexes = [];
+  renderEditorDraft();
+}
+
+function clearEditorDraft() {
+  state.editor.draft = { name: "New Set", occurrence: 4, anchor: null, items: [] };
+  state.editor.selected = null;
+  state.editor.selectedDraftIndexes = [];
+  renderEditorDraft();
+  updateEditorSelectedUi();
+}
+
+function clearEditorPlanDraft() {
+  state.editor.planDraft.cells = {};
+  renderEditorDraft();
+  renderEditorPlanTools();
+  saveGame(true);
+}
+
+function newPlanDraft() {
+  const anchor = state.editor.planDraft.anchor;
+  state.editor.planDraft = {
+    name: "New Plan",
+    occurrence: 4,
+    tileset: state.editor.planDraft.tileset || "village",
+    width: PLAN_GRID_SIZE,
+    height: PLAN_GRID_SIZE,
+    activeBrush: state.editor.planDraft.activeBrush || "wall",
+    cells: {},
+    anchor
+  };
+  renderEditorPanel();
+  saveGame(true);
+}
+
+function saveCurrentPlan() {
+  const plan = normalizePlanDraft(state.editor.planDraft);
+  if (!Object.keys(plan.cells).length) {
+    toast("Paint a plan grid first.");
+    return;
+  }
+  const existingId = state.editor.planDraft.sourcePlanId;
+  const existingIndex = state.editor.plans.findIndex(entry => entry.id === existingId);
+  if (existingIndex >= 0) {
+    const updated = {
+      ...plan,
+      id: existingId,
+      name: plan.name?.trim() || "Plan Spawn",
+      occurrence: clamp(Number(plan.occurrence) || 4, 1, 10)
+    };
+    state.editor.plans[existingIndex] = updated;
+    state.editor.planDraft = { ...updated, id: "draft-plan", sourcePlanId: existingId, cells: { ...updated.cells } };
+    saveGame(true);
+    renderEditorPanel();
+    toast(`${updated.name} updated.`);
+    return;
+  }
+  const saved = {
+    ...plan,
+    id: `plan-${Date.now()}`,
+    name: plan.name?.trim() || "Plan Spawn",
+    occurrence: clamp(Number(plan.occurrence) || 4, 1, 10)
+  };
+  state.editor.plans.push(saved);
+  state.editor.planDraft = { ...saved, id: "draft-plan", sourcePlanId: saved.id, cells: { ...saved.cells } };
+  saveGame(true);
+  renderEditorPanel();
+  toast(`${saved.name} saved as plan spawn.`);
+}
+
+function loadPlanIntoDraft(id) {
+  const plan = state.editor.plans.find(entry => entry.id === id);
+  if (!plan) return;
+  state.editor.planView = true;
+  state.editor.lineMode = false;
+  state.editor.planDraft = { ...normalizePlanDraft(plan), id: "draft-plan", sourcePlanId: plan.id, cells: { ...plan.cells } };
+  state.editor.selected = null;
+  state.editor.selectedDraftIndexes = [];
+  renderEditorPanel();
+}
+
+function loadSelectedPlanView() {
+  const select = document.getElementById("editorPlanLoadSelect");
+  if (select?.value) loadPlanIntoDraft(select.value);
+}
+
+function paintPlanFromEvent(event) {
+  const canvasEl = document.getElementById("editorPlanCanvas");
+  if (!canvasEl) return;
+  const rect = canvasEl.getBoundingClientRect();
+  const plan = state.editor.planDraft;
+  const x = Math.floor((event.clientX - rect.left) / rect.width * plan.width);
+  const y = Math.floor((event.clientY - rect.top) / rect.height * plan.height);
+  if (x < 0 || y < 0 || x >= plan.width || y >= plan.height) return;
+  const key = `${x},${y}`;
+  if (plan.activeBrush === "erase") delete plan.cells[key];
+  else plan.cells[key] = plan.activeBrush;
+  drawPlanCanvas();
+  renderEditorDraft();
+}
+
+function erasePlanCellFromEvent(event) {
+  const canvasEl = document.getElementById("editorPlanCanvas");
+  if (!canvasEl) return;
+  const rect = canvasEl.getBoundingClientRect();
+  const plan = state.editor.planDraft;
+  const x = Math.floor((event.clientX - rect.left) / rect.width * plan.width);
+  const y = Math.floor((event.clientY - rect.top) / rect.height * plan.height);
+  if (x < 0 || y < 0 || x >= plan.width || y >= plan.height) return;
+  delete plan.cells[`${x},${y}`];
+  drawPlanCanvas();
+  renderEditorDraft();
+  saveGame(true);
+}
+
+async function handlePlanTilesetUpload(input, kind) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const tilesetId = state.editor.planDraft.tileset;
+  const dataUrl = await readFileAsDataUrl(file);
+  const ok = await registerPlanTilesetSource(tilesetId, kind, dataUrl, true);
+  input.value = "";
+  if (ok) {
+    saveGame(true);
+    renderEditorPalette();
+    renderEditorPlanTools();
+    toast(`${PLAN_TILESET_DEFS[tilesetId].label} ${kind === "walls" ? "walls" : "tileset"} image assigned.`);
+  } else {
+    toast("That image could not be loaded.");
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function placeEditorPrefab(id, x, y) {
+  const prefab = editorPrefabById(id);
+  if (!prefab) return;
+  state.editor.placements.push({ id: `placement-${Date.now()}`, prefabId: id, x, y });
+  state.editor.placingPrefabId = null;
+  saveGame(true);
+  renderEditorPanel();
+  toast(`${prefab.name} placed.`);
+}
+
+function editorPrefabRandomChance(occurrence) {
+  return Math.min(0.22, Math.pow(clamp(occurrence, 1, 10), 2) / 560);
+}
+
+function editorOnceChunk(prefab) {
+  const seed = [...prefab.id].reduce((sum, ch) => sum + ch.charCodeAt(0), WORLD_SEED + 701);
+  return {
+    cx: Math.floor(hash2(seed, 1, WORLD_SEED + 703) * 17) - 8,
+    cy: Math.floor(hash2(seed, 2, WORLD_SEED + 709) * 17) - 8
+  };
+}
+
+function getEditorPrefabInstances(bounds) {
+  const instances = [];
+  for (const placement of state.editor.placements) {
+    const prefab = editorPrefabById(placement.prefabId);
+    if (prefab && placement.x >= bounds.minX - 6 && placement.x <= bounds.maxX + 6 && placement.y >= bounds.minY - 6 && placement.y <= bounds.maxY + 6) {
+      instances.push({ prefab, x: placement.x, y: placement.y, manual: true, placementId: placement.id, deletedItems: placement.deletedItems || [] });
+    }
+  }
+
+  const minCx = Math.floor(bounds.minX / CHUNK_SIZE) - 1;
+  const maxCx = Math.floor(bounds.maxX / CHUNK_SIZE) + 1;
+  const minCy = Math.floor(bounds.minY / CHUNK_SIZE) - 1;
+  const maxCy = Math.floor(bounds.maxY / CHUNK_SIZE) + 1;
+  for (const prefab of state.editor.prefabs) {
+    if (prefab.occurrence <= 1) {
+      const once = editorOnceChunk(prefab);
+      if (once.cx < minCx || once.cx > maxCx || once.cy < minCy || once.cy > maxCy) continue;
+      instances.push({ prefab, x: once.cx * CHUNK_SIZE + 8, y: once.cy * CHUNK_SIZE + 8, manual: false });
+      continue;
+    }
+    const chance = editorPrefabRandomChance(prefab.occurrence);
+    for (let cy = minCy; cy <= maxCy; cy++) {
+      for (let cx = minCx; cx <= maxCx; cx++) {
+        const roll = hash2(cx, cy, WORLD_SEED + prefab.id.length * 31);
+        if (roll > chance) continue;
+        const ox = (hash2(cx, cy, WORLD_SEED + 761) - 0.5) * EDITOR_PREFAB_RANDOM_RADIUS;
+        const oy = (hash2(cx, cy, WORLD_SEED + 769) - 0.5) * EDITOR_PREFAB_RANDOM_RADIUS;
+        instances.push({ prefab, x: cx * CHUNK_SIZE + 8 + ox, y: cy * CHUNK_SIZE + 8 + oy, manual: false });
+      }
+    }
+  }
+  return [...instances, ...getEditorPlanInstances(bounds)];
+}
+
+function getEditorPlanInstances(bounds) {
+  const instances = [];
+  const minCx = Math.floor(bounds.minX / CHUNK_SIZE) - 1;
+  const maxCx = Math.floor(bounds.maxX / CHUNK_SIZE) + 1;
+  const minCy = Math.floor(bounds.minY / CHUNK_SIZE) - 1;
+  const maxCy = Math.floor(bounds.maxY / CHUNK_SIZE) + 1;
+  for (const plan of state.editor.plans) {
+    if (plan.occurrence <= 1) {
+      const once = editorOnceChunk(plan);
+      if (once.cx < minCx || once.cx > maxCx || once.cy < minCy || once.cy > maxCy) continue;
+      instances.push(planInstanceForChunk(plan, once.cx, once.cy));
+      continue;
+    }
+    const chance = editorPrefabRandomChance(plan.occurrence);
+    for (let cy = minCy; cy <= maxCy; cy++) {
+      for (let cx = minCx; cx <= maxCx; cx++) {
+        const roll = hash2(cx, cy, WORLD_SEED + plan.id.length * 43 + 1901);
+        if (roll > chance) continue;
+        instances.push(planInstanceForChunk(plan, cx, cy));
+      }
+    }
+  }
+  return instances;
+}
+
+function planInstanceForChunk(plan, cx, cy) {
+  const seed = planSeed(plan, cx, cy);
+  const ox = (hash2(cx, cy, seed + 11) - 0.5) * EDITOR_PREFAB_RANDOM_RADIUS;
+  const oy = (hash2(cx, cy, seed + 17) - 0.5) * EDITOR_PREFAB_RANDOM_RADIUS;
+  const x = cx * CHUNK_SIZE + 8 + ox;
+  const y = cy * CHUNK_SIZE + 8 + oy;
+  return { prefab: planToPrefab(plan, seed), x, y, manual: false, planSpawn: true };
+}
+
+function planSeed(plan, cx, cy) {
+  return [...plan.id].reduce((sum, ch) => sum + ch.charCodeAt(0), WORLD_SEED + 1701 + cx * 23 - cy * 31);
+}
+
+function planToPrefab(plan, seed, options = {}) {
+  const useRuins = plan.tileset !== "ruins" && hash2(seed, plan.width, WORLD_SEED + 1777) < PLAN_RUINS_TILESET_CHANCE;
+  const tileset = useRuins ? "ruins" : plan.tileset;
+  const items = [];
+  const centerX = (plan.width - 1) / 2;
+  const centerY = (plan.height - 1) / 2;
+  let index = 0;
+  for (const [key, brush] of Object.entries(plan.cells || {})) {
+    const [cellX, cellY] = key.split(",").map(Number);
+    if (!Number.isFinite(cellX) || !Number.isFinite(cellY)) continue;
+    const spawnRoll = hash2(seed + cellX * 13, seed - cellY * 17, WORLD_SEED + 1801 + index);
+    if (!options.preview && ["house", "tower", "building"].includes(brush)) {
+      const chance = tileset === "ruins" ? PLAN_RUINS_BUILDING_SPAWN_CHANCE : PLAN_BUILDING_SPAWN_CHANCE;
+      if (spawnRoll > chance) {
+        index++;
+        continue;
+      }
+    }
+    const asset = randomPlanAsset(tileset, brush, seed, cellX, cellY, index);
+    if (!asset) {
+      index++;
+      continue;
+    }
+    const variation = editorVariationForAsset(asset, tileset, cellX + seed, cellY - seed, index, brush === "prop" ? 1 : 0.45);
+    items.push({
+      type: asset.type,
+      id: asset.id,
+      layer: planLayerForBrush(brush),
+      dx: (cellX - centerX) * 0.96,
+      dy: (cellY - centerY) * 0.96,
+      itemScale: brush === "wall" ? 0.82 : clamp(variation.itemScale, 0.78, 1.22),
+      rotation: ["house", "tower", "building", "wall"].includes(brush) ? 0 : variation.rotation,
+      flipX: hash2(seed + cellX, seed + cellY, WORLD_SEED + 1811) > 0.5
+    });
+    index++;
+  }
+  return {
+    id: `${plan.id}:${seed}`,
+    name: `${plan.name}${useRuins ? " Ruins" : ""}`,
+    occurrence: plan.occurrence,
+    items
+  };
+}
+
+function planLayerForBrush(brush) {
+  return brush === "prop" || brush === "grave" ? "ground" : "building";
+}
+
+function randomPlanAsset(tileset, brush, seed, x, y, index) {
+  const pool = planAssetPool(tileset, brush);
+  if (!pool.length) return null;
+  const roll = hash2(seed + x * 29 + index * 7, seed - y * 31, WORLD_SEED + brush.length * 97);
+  return pool[Math.floor(roll * pool.length) % pool.length];
+}
+
+function planAssetPool(tileset, brush) {
+  const wallTileset = tileset === "ruins" ? "ruins" : tileset;
+  const loadedTileset = brush === "wall" ? wallTileset : tileset;
+  const loaded = Object.values(biomeSprites)
+    .filter(sprite => sprite.planTileset === loadedTileset && planRoleMatchesBrush(sprite.planRole, brush))
+    .map(sprite => ({ type: "biome", id: sprite.id }));
+  if (loaded.length) return loaded;
+  return fallbackPlanAssetPool(tileset, brush);
+}
+
+function planRoleMatchesBrush(role, brush) {
+  if (brush === "wall") return role === "wall";
+  if (brush === "house") return role === "house" || role === "building";
+  if (brush === "tower") return role === "tower";
+  if (brush === "building") return role === "building" || role === "house";
+  if (brush === "grave") return role === "grave" || role === "prop";
+  if (brush === "prop") return role === "prop" || role === "building";
+  return false;
+}
+
+function fallbackPlanAssetPool(tileset, brush) {
+  const ids = Object.entries(biomeSprites)
+    .filter(([id, sprite]) => fallbackPlanSpriteMatch(id, sprite, tileset, brush))
+    .map(([id]) => ({ type: "biome", id }));
+  if (ids.length) return ids;
+  if (brush === "wall") return [WALL_SPRITES.segment, WALL_SPRITES.gate].filter(id => biomeSprites[id]).map(id => ({ type: "biome", id }));
+  return editorLineAssetPool(tileset === "ruins" ? "ruins" : "village").filter(asset => asset.type === "biome");
+}
+
+function fallbackPlanSpriteMatch(id, sprite, tileset, brush) {
+  const kind = sprite.kind || "";
+  const text = `${id} ${sprite.name || ""} ${sprite.promptSummary || ""}`.toLowerCase();
+  if (tileset === "ruins" && ["house", "tower", "building"].includes(brush)) {
+    return ["ruin", "gate", "arch", "shrine"].includes(kind) || /ruin|collapsed|crypt|grave|broken/.test(text);
+  }
+  if (brush === "wall") {
+    if (tileset === "ruins") return kind === "wall" && /ruin|broken|palisade|spiked|stone|rubble/.test(text);
+    return kind === "wall" || id === WALL_SPRITES.segment || id === WALL_SPRITES.gate;
+  }
+  if (brush === "house") return ["house", "shop", "stable", "cabin", "hut"].includes(kind) || /cottage|cabin|hut|house|shop|tent/.test(text);
+  if (brush === "tower") return kind === "tower" || /tower|watchtower|gate/.test(text);
+  if (brush === "building") return ["building", "church", "forge", "barn", "gate", "arch", "bridge"].includes(kind);
+  if (brush === "grave") return ["grave", "statue", "shrine"].includes(kind) || /grave|crypt|tomb|statue|chapel/.test(text);
+  if (brush === "prop") return ["container", "wagon", "campfire", "signpost", "altar", "well", "rubble"].includes(kind);
+  return false;
 }
 
 function normalizeCamera() {
@@ -1130,15 +2680,36 @@ function saveGame(force = false) {
   const now = performance.now();
   if (!force && now - state.lastSave < 1000) return;
   state.lastSave = now;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    heroes: state.heroes,
-    activeHeroId: state.activeHeroId,
-    worldEdits: state.worldEdits,
-    loot: state.loot,
-    camera: state.camera,
-    quest: state.quest,
-    inside: state.inside
-  }));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      heroes: state.heroes,
+      activeHeroId: state.activeHeroId,
+      worldEdits: state.worldEdits,
+      loot: state.loot,
+      editor: {
+        scales: state.editor.scales,
+        prefabs: state.editor.prefabs,
+        plans: state.editor.plans,
+        placements: state.editor.placements,
+        planDraft: state.editor.planDraft,
+        planModal: state.editor.planModal,
+        planTilesetSources: state.editor.planTilesetSources,
+        activeLayer: state.editor.activeLayer,
+        layerVisibility: state.editor.layerVisibility,
+        lineCategory: state.editor.lineCategory,
+        lineShape: state.editor.lineShape,
+        brushDensity: state.editor.brushDensity,
+        planView: state.editor.planView,
+        draft: state.editor.draft
+      },
+      camera: state.camera,
+      quest: state.quest,
+      inside: state.inside
+    }));
+  } catch (error) {
+    console.warn("Save failed.", error);
+    toast("Save failed. Try a smaller tileset image.");
+  }
 }
 
 function resize() {
@@ -1325,6 +2896,10 @@ function propBlocksPosition(x, y) {
 
 function propCollisionRadius(propId) {
   if (PROP_COLLISION_RADII[propId]) return PROP_COLLISION_RADII[propId];
+  const kind = biomeSprites[propId]?.kind || "";
+  if (["ground_prop", "ground_cover", "path", "road", "grass", "flower", "mushroom", "fern", "foliage"].includes(kind)) return 0;
+  if (["building", "house", "shop", "tower", "church", "stable", "forge", "hut", "cabin", "barn", "bridge", "gate", "arch", "wall", "shrine", "statue", "ruin"].includes(kind)) return 0.72;
+  if (["rock", "rubble", "boulder", "wagon", "container", "well", "altar", "siege", "gibbet"].includes(kind)) return 0.5;
   if (NON_SOLID_PROP_PARTS.some(part => propId.includes(part))) return 0;
   if (propId.includes("tree")) return 0.48;
   if (propId.includes("bush")) return 0.32;
@@ -2465,6 +4040,7 @@ function render() {
   drawParticles();
   drawScreenEffects();
   drawInteriorOverlay();
+  drawEditorSelection();
   drawMiniMapThrottled();
 }
 
@@ -2500,7 +4076,7 @@ function drawMap() {
   for (const prop of props) {
     prop.depth = prop.x + prop.y + 0.7;
   }
-  return { props, forests: visibleForestTiles };
+  return { props, forests: visibleForestTiles, bounds: view.tileBounds };
 }
 
 function createMapRenderView() {
@@ -2602,13 +4178,13 @@ function getVisibleProps(view, detail) {
       if (!tile.prop || tile.water) continue;
       if (isDestroyedProp(tile.prop, x, y)) continue;
       const screen = worldToScreen(x, y);
-      const tall = tile.prop.includes("tree") || tile.prop.includes("bramble");
-      const width = tall ? 92 : 62;
-      const height = tall ? 110 : 68;
+      const size = biomeSpriteDisplaySize(tile.prop);
+      const width = size.width;
+      const height = size.height;
       const scaledWidth = width * WORLD_ITEM_DRAW_SCALE;
       const scaledHeight = height * WORLD_ITEM_DRAW_SCALE;
       if (!isScreenRectVisible(screen.x - scaledWidth * state.camera.zoom / 2, screen.y - scaledHeight * state.camera.zoom, scaledWidth * state.camera.zoom, scaledHeight * state.camera.zoom + TILE_H * state.camera.zoom)) continue;
-      props.push({ id: tile.prop, x, y, screen, tall, alpha });
+      props.push({ id: tile.prop, x, y, screen, alpha });
     }
   }
   return props;
@@ -2752,11 +4328,12 @@ function drawForestClusterSprite(forest, p, tw, th, alpha = 1) {
 function drawProceduralForestCluster(forest, x, y, p, tw, th, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = 0.86 * alpha;
+  const editorScale = editorScaleFor("forest", "cluster");
   for (let i = 0; i < forest.density; i++) {
     const seed = hash2(x + i * 3, y - i * 5, WORLD_SEED + 181);
     const px = p.x + (seed - 0.5) * tw * 0.74;
     const py = p.y + th * (0.3 + hash2(x - i * 7, y + i * 2, WORLD_SEED + 191) * 0.42);
-    const h = th * (1.08 + hash2(x + i, y + i, WORLD_SEED + 197) * 0.82) * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_HEIGHT_SCALE;
+    const h = th * (1.08 + hash2(x + i, y + i, WORLD_SEED + 197) * 0.82) * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_HEIGHT_SCALE * editorScale;
     const crown = h * (0.22 + seed * 0.08);
     ctx.fillStyle = forest.variant % 2 ? "#111c13" : "#172414";
     ctx.beginPath();
@@ -2782,8 +4359,9 @@ function isForestClusterVisible(forest, p, tw, th) {
 }
 
 function getForestClusterScreenRect(forest, p, tw, th) {
-  const width = tw * 1.46 * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_WIDTH_SCALE;
-  const height = th * 2.75 * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_HEIGHT_SCALE;
+  const editorScale = editorScaleFor("forest", "cluster");
+  const width = tw * 1.46 * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_WIDTH_SCALE * editorScale;
+  const height = th * 2.75 * forest.scale * WORLD_ITEM_DRAW_SCALE * FOREST_TEXTURE_HEIGHT_SCALE * editorScale;
   return {
     x: p.x - width / 2,
     y: p.y + th * 0.68 - height,
@@ -2968,6 +4546,89 @@ function biomeColor(biome) {
   }[biome] || "#1b2119";
 }
 
+function getEditorPrefabRenderItems(bounds) {
+  const draftInstances = state.editor.open && state.editor.draft.anchor && state.editor.draft.items.length
+    ? [{ prefab: { name: state.editor.draft.name, items: state.editor.draft.items }, x: state.editor.draft.anchor.x, y: state.editor.draft.anchor.y, draft: true }]
+    : [];
+  const planDraftInstance = getPlanDraftPreviewInstance(bounds);
+  return [...getEditorPrefabInstances(bounds), ...draftInstances, ...planDraftInstance].flatMap(instance => instance.prefab.items.flatMap((item, index) => {
+    if (instance.deletedItems?.includes(index)) return [];
+    if (!editorLayerVisible(item.layer)) return [];
+    const x = instance.x + (item.dx || 0);
+    const y = instance.y + (item.dy || 0);
+    return {
+      kind: "editorPrefabItem",
+      depth: x + y + editorLayerDepth(item.layer) + index * 0.01,
+      data: { ...item, x, y, prefabName: instance.prefab.name, manual: instance.manual, placementId: instance.placementId, draft: instance.draft, draftIndex: index, itemIndex: index }
+    };
+  }));
+}
+
+function getPlanDraftPreviewInstance(bounds) {
+  const plan = state.editor.planDraft;
+  if (!state.editor.open || !state.editor.planView || !plan?.anchor || !Object.keys(plan.cells || {}).length) return [];
+  if (plan.anchor.x < bounds.minX - 12 || plan.anchor.x > bounds.maxX + 12 || plan.anchor.y < bounds.minY - 12 || plan.anchor.y > bounds.maxY + 12) return [];
+  const seed = Math.floor(plan.anchor.x * 71 + plan.anchor.y * 83 + WORLD_SEED + 2203);
+  return [{ prefab: planToPrefab(plan, seed, { preview: true }), x: plan.anchor.x, y: plan.anchor.y, draft: true, planDraft: true }];
+}
+
+function drawEditorPrefabItem(item) {
+  const p = worldToScreen(item.x, item.y);
+  const itemScale = Number.isFinite(item.itemScale) ? item.itemScale : 1;
+  const rotation = Number.isFinite(item.rotation) ? item.rotation : 0;
+  if (item.type === "biome") {
+    if (isWallEditorItem(item)) {
+      drawWallSpriteItem(item, p);
+      return;
+    }
+    const size = editorBiomeSpriteSize(item.id);
+    drawBiomeSprite(item.id, p.x, p.y + size.yOffset * state.camera.zoom, size.width, size.height, item.flipX ? -1 : 1, FAR_PROP_MIN_RENDER_ZOOM, itemScale, rotation);
+  } else if (item.type === "enemy") {
+    drawActor({ id: item.id, sprite: item.id, name: enemyName(item.id), kind: "enemy", x: item.x, y: item.y, hp: 1, maxHp: 1, dir: 1, walkT: 0, attackT: 0 });
+  } else if (item.type === "item") {
+    drawLoot({ id: item.id, x: item.x, y: item.y, qty: 1 });
+  } else if (item.type === "forest") {
+    const z = state.camera.zoom;
+    const forest = { variant: Math.floor(Math.abs(rotation) * 1000) % 4, scale: itemScale, density: 4 };
+    drawForestClusterSprite(forest, p, TILE_W * z, TILE_H * z, 0.92) || drawProceduralForestCluster(forest, Math.floor(item.x), Math.floor(item.y), p, TILE_W * z, TILE_H * z, 0.92);
+  }
+}
+
+function editorBiomeSpriteSize(id) {
+  return biomeSpriteDisplaySize(id);
+}
+
+function biomeSpriteDisplaySize(id) {
+  const sprite = biomeSprites[id];
+  if (id === WALL_SPRITES.segment || id === WALL_SPRITES.gate) return { width: WALL_CELL_WIDTH, height: WALL_CELL_HEIGHT, yOffset: 0 };
+  const kind = sprite?.kind || "";
+  if (["building", "house", "shop", "tower", "church", "stable", "forge", "hut", "cabin", "barn", "gate", "arch", "bridge"].includes(kind)) return { width: 190, height: 190, yOffset: 18 };
+  if (["shrine", "altar", "statue", "well", "portal", "siege", "gibbet", "wall", "ruin"].includes(kind)) return { width: 126, height: 126, yOffset: 4 };
+  if (["container", "wagon"].includes(kind)) return { width: 82, height: 82, yOffset: 0 };
+  if (["rock", "boulder", "rubble"].includes(kind)) return { width: 76, height: 76, yOffset: 0 };
+  if (["ground_prop", "ground_cover", "path", "road", "grass", "foliage", "flower", "fern", "mushroom"].includes(kind)) return { width: 78, height: 78, yOffset: 0 };
+  if (kind === "animal") return { width: 54, height: 54, yOffset: 0 };
+  const tall = id.includes("tree") || id.includes("bramble");
+  return { width: tall ? 110 : 68, height: tall ? 110 : 68, yOffset: 0 };
+}
+
+function drawWallSpriteItem(item, p) {
+  const sprite = biomeSprites[item.id];
+  const image = sprite && biomeAssets[sprite.atlas];
+  if (!sprite || !assetLoaded(image)) return false;
+  const rect = sprite.approxRect;
+  const z = Math.max(state.camera.zoom, FAR_PROP_MIN_RENDER_ZOOM);
+  const scale = Number.isFinite(item.itemScale) ? item.itemScale : 1;
+  const dw = rect.w * z * scale;
+  const dh = rect.h * z * scale;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.scale(item.flipX ? -1 : 1, 1);
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, -dw / 2, -dh * 0.82, dw, dh);
+  ctx.restore();
+  return true;
+}
+
 function drawDepthSortedWorld(worldItems) {
   const actors = [
     ...state.loot.map(l => ({ kind: "loot", depth: l.x + l.y - 0.05, data: l })),
@@ -2984,13 +4645,15 @@ function drawDepthSortedWorld(worldItems) {
   const decals = getWorldDecals().map(decal => ({ kind: "decal", depth: decal.x + decal.y + 0.85, data: decal }));
   const forests = (worldItems?.forests || []).map(entry => ({ kind: "forest", depth: entry.depth, data: entry }));
   const props = (worldItems?.props || []).map(prop => ({ kind: "prop", depth: prop.depth, data: prop }));
-  const items = [...decals, ...forests, ...props, ...buildings, ...actors].sort((a, b) => a.depth - b.depth);
+  const editorItems = getEditorPrefabRenderItems(worldItems?.bounds || createMapRenderView().tileBounds);
+  const items = [...decals, ...forests, ...props, ...editorItems, ...buildings, ...actors].sort((a, b) => a.depth - b.depth);
 
   for (const item of items) {
     if (item.kind === "decal") drawRuinedVillageDecal(item.data);
     else if (item.kind === "forest") drawForestEntry(item.data);
     else if (item.kind === "prop") drawProp(item.data);
     else if (item.kind === "building") drawBuilding(item.data);
+    else if (item.kind === "editorPrefabItem") drawEditorPrefabItem(item.data);
     else if (item.kind === "loot") drawLoot(item.data);
     else drawActor(item.data);
   }
@@ -3032,7 +4695,8 @@ function drawForestEntry(entry) {
 function drawProp(prop) {
   ctx.save();
   ctx.globalAlpha = prop.alpha ?? 1;
-  if (!drawBiomeSprite(prop.id, prop.screen.x, prop.screen.y, prop.tall ? 92 : 62, prop.tall ? 110 : 68, 1, FAR_PROP_MIN_RENDER_ZOOM)) {
+  const size = biomeSpriteDisplaySize(prop.id);
+  if (!drawBiomeSprite(prop.id, prop.screen.x, prop.screen.y + size.yOffset * state.camera.zoom, size.width, size.height, 1, FAR_PROP_MIN_RENDER_ZOOM)) {
     ctx.fillStyle = "rgba(97, 153, 69, 0.34)";
     ctx.fillRect(prop.screen.x - 3, prop.screen.y + TILE_H * state.camera.zoom / 2 - 2, 6, 4);
   }
@@ -3054,8 +4718,7 @@ function drawBuilding(b) {
     }
     const generated = worldAssets[b.asset || b.id];
     if (assetLoaded(generated)) {
-      const width = (b.id === "forge" ? 210 : 250) * WORLD_ITEM_DRAW_SCALE;
-      const height = (b.id === "forge" ? 190 : 230) * WORLD_ITEM_DRAW_SCALE;
+      const size = (b.id === "forge" ? 210 : 250) * WORLD_ITEM_DRAW_SCALE;
       ctx.save();
       ctx.translate(base.x, base.y);
       ctx.scale(z, z);
@@ -3063,7 +4726,7 @@ function drawBuilding(b) {
       ctx.beginPath();
       ctx.ellipse(0, 24, b.w * 42 * WORLD_ITEM_DRAW_SCALE, b.h * 18 * WORLD_ITEM_DRAW_SCALE, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.drawImage(generated, -width / 2, -height + 38, width, height);
+      drawImageContained(generated, 0, 0, generated.naturalWidth, generated.naturalHeight, -size / 2, -size + 38, size, size, 0.5, 1);
       if (b.open || state.inside === b.id) {
         ctx.shadowColor = "#56d9ff";
         ctx.shadowBlur = 20;
@@ -3114,18 +4777,33 @@ function assetLoaded(image) {
   return image && image.complete && image.naturalWidth > 0;
 }
 
-function drawBiomeSprite(id, x, y, width, height, dir = 1, minZoom = 0) {
+function drawImageContainedOn(targetCtx, image, sx, sy, sw, sh, dx, dy, dw, dh, alignX = 0.5, alignY = 0.5) {
+  if (!sw || !sh || !dw || !dh) return;
+  const scale = Math.min(dw / sw, dh / sh);
+  const width = sw * scale;
+  const height = sh * scale;
+  const x = dx + (dw - width) * alignX;
+  const y = dy + (dh - height) * alignY;
+  targetCtx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
+}
+
+function drawImageContained(image, sx, sy, sw, sh, dx, dy, dw, dh, alignX = 0.5, alignY = 0.5) {
+  drawImageContainedOn(ctx, image, sx, sy, sw, sh, dx, dy, dw, dh, alignX, alignY);
+}
+
+function drawBiomeSprite(id, x, y, width, height, dir = 1, minZoom = 0, itemScale = 1, rotation = 0) {
   const sprite = biomeSprites[id];
   const image = sprite && biomeAssets[sprite.atlas];
   if (!sprite || !assetLoaded(image)) return false;
   const rect = sprite.approxRect;
   const z = Math.max(state.camera.zoom, minZoom);
-  const dw = width * z * WORLD_ITEM_DRAW_SCALE;
-  const dh = height * z * WORLD_ITEM_DRAW_SCALE;
+  const editorScale = editorScaleFor("biome", id);
+  const box = Math.max(width, height) * z * WORLD_ITEM_DRAW_SCALE * editorScale * itemScale;
   ctx.save();
   ctx.translate(x, y);
+  if (rotation) ctx.rotate(rotation);
   ctx.scale(dir === -1 ? -1 : 1, 1);
-  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, -dw / 2, -dh * 0.82, dw, dh);
+  drawImageContained(image, rect.x, rect.y, rect.w, rect.h, -box / 2, -box * 0.82, box, box, 0.5, 1);
   ctx.restore();
   return true;
 }
@@ -3160,7 +4838,8 @@ function drawActor(actor) {
   } : { x: 0, y: 0 };
   ctx.save();
   ctx.translate(p.x + shake.x, p.y + shake.y);
-  ctx.scale(z * (actor.dir === -1 ? -1 : 1), z);
+  const editorActorScale = actor.kind === "enemy" ? editorScaleFor("enemy", actor.sprite) : 1;
+  ctx.scale(z * editorActorScale * (actor.dir === -1 ? -1 : 1), z * editorActorScale);
   const actorScale = actor.kind === "enemy" ? ENEMY_DRAW_SCALE : 1;
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.beginPath();
@@ -3228,12 +4907,13 @@ function drawNameplate(actor, p) {
 function drawLoot(loot) {
   const p = worldToScreen(loot.x, loot.y);
   const z = state.camera.zoom;
+  const editorScale = editorScaleFor("item", loot.id);
   ctx.save();
   ctx.translate(p.x, p.y + Math.sin(performance.now() / 240) * 3);
-  ctx.scale(z, z);
-  drawSprite(loot.id, -18 * WORLD_ITEM_DRAW_SCALE, -38 * WORLD_ITEM_DRAW_SCALE, 36 * WORLD_ITEM_DRAW_SCALE, 36 * WORLD_ITEM_DRAW_SCALE);
+  ctx.scale(z * editorScale, z * editorScale);
+  drawSprite(loot.id, -18 * WORLD_ITEM_DRAW_SCALE, -38 * WORLD_ITEM_DRAW_SCALE, 36 * WORLD_ITEM_DRAW_SCALE, 36 * WORLD_ITEM_DRAW_SCALE, true);
   ctx.restore();
-  drawLabel(itemName(loot.id), p.x, p.y - 44 * z * WORLD_ITEM_DRAW_SCALE, loot.id === "runeShard" ? "#b16bff" : "#e8c06a");
+  drawLabel(itemName(loot.id), p.x, p.y - 44 * z * WORLD_ITEM_DRAW_SCALE * editorScale, loot.id === "runeShard" ? "#b16bff" : "#e8c06a");
 }
 
 function actorSpriteFrame(id) {
@@ -3271,7 +4951,7 @@ function drawAnimatedActorSprite(actor, actorScale, attack, bob, spriteYOffset) 
   return true;
 }
 
-function drawSprite(id, x, y, w, h) {
+function drawSprite(id, x, y, w, h, preserveAspect = false) {
   const drawable = resolveDrawableSprite(id);
   if (!drawable) {
     ctx.fillStyle = "#c38a2f";
@@ -3281,7 +4961,15 @@ function drawSprite(id, x, y, w, h) {
   const { sprite, image } = drawable;
   if (sprite.keyColor) {
     const canvas = keyedSpriteCanvas(id, sprite, image);
+    if (preserveAspect) {
+      drawImageContained(canvas, 0, 0, canvas.width, canvas.height, x, y, w, h);
+      return;
+    }
     ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, x, y, w, h);
+    return;
+  }
+  if (preserveAspect) {
+    drawImageContained(image, sprite.x, sprite.y, sprite.width || SPRITE_CELL, sprite.height || SPRITE_CELL, x, y, w, h);
     return;
   }
   ctx.drawImage(image, sprite.x, sprite.y, sprite.width || SPRITE_CELL, sprite.height || SPRITE_CELL, x, y, w, h);
@@ -4007,9 +5695,686 @@ function setMode(mode) {
 
 let cameraDrag = null;
 let suppressNextCanvasClick = false;
+let editorResizeDrag = null;
+let editorDraftMoveDrag = null;
+let editorRectSelectDrag = null;
+let editorLineDrag = null;
+let editorPlanPainting = false;
+let editorPlanModalDrag = null;
 const CAMERA_DRAG_THRESHOLD = 4;
 
+function editorSelectionBox(selection = state.editor.selected) {
+  if (!selection) return null;
+  const p = worldToScreen(selection.x, selection.y);
+  const scale = editorScaleFor(selection.type, selection.id);
+  const itemScale = Number.isFinite(selection.itemScale) ? selection.itemScale : 1;
+  const z = state.camera.zoom;
+  const base = {
+    biome: selection.type === "biome"
+      ? { w: editorBiomeSpriteSize(selection.id).width * WORLD_ITEM_DRAW_SCALE, h: editorBiomeSpriteSize(selection.id).height * WORLD_ITEM_DRAW_SCALE }
+      : { w: 78, h: 86 },
+    enemy: { w: 82, h: 96 },
+    item: { w: 36 * WORLD_ITEM_DRAW_SCALE, h: 36 * WORLD_ITEM_DRAW_SCALE },
+    forest: { w: 132, h: 132 }
+  }[selection.type] || { w: 70, h: 70 };
+  const width = base.w * z * scale * itemScale;
+  const height = base.h * z * scale * itemScale;
+  return { x: p.x - width / 2, y: p.y - height * 0.82, width, height, handle: { x: p.x + width / 2, y: p.y - height * 0.82 + height } };
+}
+
+function editorHandleHit(sx, sy) {
+  const box = editorSelectionBox();
+  if (!box) return false;
+  return Math.hypot(sx - box.handle.x, sy - box.handle.y) <= 12;
+}
+
+function editorLineSamplePoints(start, end, category) {
+  if (state.editor.lineShape === "circle") return editorCircleSamplePoints(start, end, category);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  const spacing = editorLineSpacingFor(category);
+  const count = clamp(Math.floor(length / spacing) + 1, 1, 120);
+  const normalX = length ? -dy / length : 0;
+  const normalY = length ? dx / length : 0;
+  const curve = state.editor.lineShape === "curved" ? length * 0.28 : 0;
+  const curveSide = hash2(Math.floor(start.x * 11), Math.floor(start.y * 11), WORLD_SEED + 1487) > 0.5 ? 1 : -1;
+  const points = [];
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0 : i / (count - 1);
+    const curveOffset = Math.sin(t * Math.PI) * curve * curveSide;
+    const x = start.x + dx * t + normalX * curveOffset;
+    const y = start.y + dy * t + normalY * curveOffset;
+    const jitter = (hash2(Math.floor(x * 31), Math.floor(y * 31), WORLD_SEED + i * 17) - 0.5) * spacing * 0.42;
+    points.push({ x: x + normalX * jitter, y: y + normalY * jitter });
+  }
+  return points;
+}
+
+function editorCircleSamplePoints(center, edge, category) {
+  const radius = Math.hypot(edge.x - center.x, edge.y - center.y);
+  if (radius <= 0.05) return [{ x: center.x, y: center.y }];
+  const spacing = editorLineSpacingFor(category);
+  const count = clamp(Math.round((Math.PI * 2 * radius) / spacing), 8, 160);
+  const points = [];
+  for (let i = 0; i < count; i++) {
+    const angle = -Math.PI / 2 + (i / count) * Math.PI * 2;
+    points.push({
+      x: center.x + Math.cos(angle) * radius,
+      y: center.y + Math.sin(angle) * radius
+    });
+  }
+  return points;
+}
+
+function editorWallBounds(start, end) {
+  let minX = Math.floor(Math.min(start.x, end.x));
+  let maxX = Math.ceil(Math.max(start.x, end.x));
+  let minY = Math.floor(Math.min(start.y, end.y));
+  let maxY = Math.ceil(Math.max(start.y, end.y));
+  if (maxX - minX < 2) {
+    const centerX = Math.round((minX + maxX) / 2);
+    minX = centerX - 1;
+    maxX = centerX + 1;
+  }
+  if (maxY - minY < 2) {
+    const centerY = Math.round((minY + maxY) / 2);
+    minY = centerY - 1;
+    maxY = centerY + 1;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function wallTileSequence(min, max, spacing) {
+  const step = clamp(Math.round(spacing) || 1, 1, 6);
+  const values = [];
+  for (let value = min; value <= max; value += step) values.push(value);
+  if (!values.includes(max)) values.push(max);
+  return values;
+}
+
+function editorWallItemsForRect(start, end, spacing = 1) {
+  const bounds = editorWallBounds(start, end);
+  const wallSpacing = clamp(Math.round(spacing) || 1, 1, 6);
+  const gateX = Math.round((bounds.minX + bounds.maxX) / 2);
+  const items = [];
+  const usedTiles = new Set();
+  const push = (id, x, y, wallSide, wallRole, itemScale = 1, flipX = false) => {
+    const tileX = Math.round(x);
+    const tileY = Math.round(y);
+    const key = `${tileX},${tileY}`;
+    if (usedTiles.has(key)) return;
+    usedTiles.add(key);
+    items.push({
+      asset: { type: "biome", id },
+      point: { x: tileX, y: tileY },
+      layer: "building",
+      itemScale,
+      rotation: 0,
+      flipX,
+      wallSide,
+      wallRole,
+      wallSpacing
+    });
+  };
+
+  for (const x of wallTileSequence(bounds.minX, bounds.maxX, wallSpacing)) {
+    push(WALL_SPRITES.segment, x, bounds.minY, "back", "segment", 1, false);
+    if (x !== gateX) push(WALL_SPRITES.segment, x, bounds.maxY, "front", "segment", 1, false);
+  }
+  for (const y of wallTileSequence(bounds.minY, bounds.maxY, wallSpacing)) {
+    if (y <= bounds.minY || y >= bounds.maxY) continue;
+    push(WALL_SPRITES.segment, bounds.minX, y, "top", "segment", 1, true);
+    push(WALL_SPRITES.segment, bounds.maxX, y, "bottom", "segment", 1, true);
+  }
+  push(WALL_SPRITES.gate, gateX, bounds.maxY, "gate", "gate", 1, false);
+  return items;
+}
+
+function commitEditorLine(start, end) {
+  const category = state.editor.lineCategory;
+  if (!editorLineAssetPool(category).length) {
+    toast("Biome assets are still loading.");
+    return;
+  }
+  const points = editorLineSamplePoints(start, end, category);
+  if (!points.length) return;
+  for (const [index, point] of points.entries()) {
+    const assetCategory = category === "biome" ? editorCategoryForBiome(point.x, point.y) : category;
+    const asset = randomLineAsset(assetCategory, point.x, point.y, index);
+    addAssetToDraft(asset, point, { render: false, layer: editorLayerForAsset(asset), ...editorVariationForAsset(asset, assetCategory, point.x, point.y, index, 0.8) });
+  }
+  renderEditorDraft();
+  updateEditorSelectedUi();
+  saveGame(true);
+  toast(`Added ${points.length} ${category} item${points.length === 1 ? "" : "s"}.`);
+}
+
+function commitEditorWall(start, end) {
+  if (!biomeSprites[WALL_SPRITES.gate]) {
+    toast("Wall assets are still loading.");
+    return;
+  }
+  const items = editorWallItemsForRect(start, end);
+  const wallGroupId = `wall-${Date.now()}-${Math.floor(hash2(Math.floor(start.x * 10), Math.floor(start.y * 10), WORLD_SEED + 1663) * 100000)}`;
+  for (const item of items) {
+    addAssetToDraft(item.asset, item.point, {
+      render: false,
+      layer: item.layer,
+      itemScale: item.itemScale,
+      rotation: item.rotation,
+      flipX: item.flipX,
+      wallGroupId,
+      wallSide: item.wallSide,
+      wallRole: item.wallRole,
+      wallSpacing: item.wallSpacing
+    });
+  }
+  renderEditorDraft();
+  updateEditorSelectedUi();
+  saveGame(true);
+  toast(`Added tile-spaced wall with ${items.length} pieces and one front gate.`);
+}
+
+function scatterFillEditorDraft() {
+  const center = state.editor.draft.anchor || activeHero();
+  const density = clamp(Number(state.editor.brushDensity) || 4, 1, 10);
+  const radius = 2.2 + density * 0.32;
+  const count = Math.round(8 + density * 5);
+  const category = state.editor.lineCategory === "biome" ? editorCategoryForBiome(center.x, center.y) : state.editor.lineCategory;
+  if (!state.editor.draft.anchor) state.editor.draft.anchor = { x: center.x, y: center.y };
+  for (let i = 0; i < count; i++) {
+    const angle = hash2(i, Math.floor(center.x * 19), WORLD_SEED + 1501) * Math.PI * 2;
+    const dist = Math.sqrt(hash2(i, Math.floor(center.y * 19), WORLD_SEED + 1511)) * radius;
+    const point = {
+      x: center.x + Math.cos(angle) * dist,
+      y: center.y + Math.sin(angle) * dist * 0.72
+    };
+    const assetCategory = state.editor.lineCategory === "biome" ? editorCategoryForBiome(point.x, point.y) : category;
+    const asset = randomLineAsset(assetCategory, point.x, point.y, i);
+    addAssetToDraft(asset, point, { render: false, layer: editorLayerForAsset(asset), ...editorVariationForAsset(asset, assetCategory, point.x, point.y, i, 1) });
+  }
+  renderEditorDraft();
+  updateEditorSelectedUi();
+  saveGame(true);
+  toast(`Scatter-filled ${count} ${category} items.`);
+}
+
+function saveVariantFromSelection() {
+  const draft = state.editor.draft;
+  const selected = [...new Set(state.editor.selectedDraftIndexes || [])].filter(index => Number.isInteger(index) && draft.items[index]);
+  const indexes = selected.length ? selected : draft.items.map((_, index) => index);
+  if (!indexes.length || !draft.anchor) {
+    toast("Select or draw a cluster first.");
+    return;
+  }
+  const entries = indexes.map(index => {
+    const item = draft.items[index];
+    return {
+      item,
+      x: draft.anchor.x + (item.dx || 0),
+      y: draft.anchor.y + (item.dy || 0)
+    };
+  });
+  const center = entries.reduce((sum, entry) => ({
+    x: sum.x + entry.x / entries.length,
+    y: sum.y + entry.y / entries.length
+  }), { x: 0, y: 0 });
+  const variantSeed = Date.now() % 100000;
+  const prefab = {
+    id: `prefab-${Date.now()}`,
+    name: `${draft.name?.trim() || "Cluster"} Variant`,
+    occurrence: clamp(Number(draft.occurrence) || 4, 1, 10),
+    items: entries.map((entry, index) => {
+      const spacing = 0.82 + hash2(index, variantSeed, WORLD_SEED + 1523) * 0.42;
+      const jitter = (hash2(index, variantSeed, WORLD_SEED + 1531) - 0.5) * 0.42;
+      const variation = editorVariationFor(entry.x + variantSeed, entry.y - variantSeed, index, 1.25);
+      return {
+        ...entry.item,
+        dx: (entry.x - center.x) * spacing + jitter,
+        dy: (entry.y - center.y) * spacing - jitter * 0.6,
+        itemScale: clamp((entry.item.itemScale || 1) * variation.itemScale, 0.65, 1.45),
+        rotation: (entry.item.rotation || 0) + variation.rotation
+      };
+    })
+  };
+  state.editor.prefabs.push(prefab);
+  saveGame(true);
+  renderSavedPrefabs();
+  toast(`${prefab.name} saved.`);
+}
+
+function drawEditorSelection() {
+  if (!state.editor.open) return;
+  ctx.save();
+  if (state.editor.planView) drawPlanViewMarker();
+  const selectedDraftIndexes = state.editor.selectedDraftIndexes || [];
+  if (selectedDraftIndexes.length > 1) {
+    for (const index of selectedDraftIndexes) {
+      const selection = editorDraftSelection(index);
+      const box = editorSelectionBox(selection);
+      if (!box) continue;
+      ctx.strokeStyle = "#7bdff2";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeRect(box.x, box.y, box.width, box.height);
+    }
+  } else {
+    const box = editorSelectionBox();
+    if (box) {
+      ctx.strokeStyle = "#f0c46a";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 5]);
+      ctx.strokeRect(box.x, box.y, box.width, box.height);
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#10100d";
+      ctx.strokeStyle = "#ffe2a0";
+      ctx.fillRect(box.handle.x - 6, box.handle.y - 6, 12, 12);
+      ctx.strokeRect(box.handle.x - 6, box.handle.y - 6, 12, 12);
+    }
+  }
+  const rect = editorDragRect();
+  if (rect) {
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(123, 223, 242, 0.14)";
+    ctx.strokeStyle = "rgba(123, 223, 242, 0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  }
+  if (editorLineDrag) {
+    ctx.setLineDash([10, 7]);
+    ctx.strokeStyle = "#f0c46a";
+    ctx.lineWidth = 2;
+    const lineShape = state.editor.lineShape;
+    if (lineShape === "circle") {
+      const points = editorLineSamplePoints(editorLineDrag.startWorld, editorLineDrag.currentWorld, state.editor.lineCategory);
+      ctx.beginPath();
+      points.forEach((point, index) => {
+        const p = worldToScreen(point.x, point.y);
+        if (index === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    } else if (lineShape === "wall") {
+      const bounds = editorWallBounds(editorLineDrag.startWorld, editorLineDrag.currentWorld);
+      const corners = [
+        worldToScreen(bounds.minX, bounds.minY),
+        worldToScreen(bounds.maxX, bounds.minY),
+        worldToScreen(bounds.maxX, bounds.maxY),
+        worldToScreen(bounds.minX, bounds.maxY)
+      ];
+      ctx.beginPath();
+      corners.forEach((point, index) => {
+        if (index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(editorLineDrag.startScreen.x, editorLineDrag.startScreen.y);
+      ctx.lineTo(editorLineDrag.x, editorLineDrag.y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(240, 196, 106, 0.9)";
+    const previewPoints = lineShape === "wall"
+      ? editorWallItemsForRect(editorLineDrag.startWorld, editorLineDrag.currentWorld).map(item => ({ ...item.point, gate: item.asset.id === WALL_SPRITES.gate }))
+      : editorLineSamplePoints(editorLineDrag.startWorld, editorLineDrag.currentWorld, state.editor.lineCategory);
+    for (const point of previewPoints) {
+      const p = worldToScreen(point.x, point.y);
+      ctx.fillStyle = point.gate ? "rgba(123, 223, 242, 0.95)" : "rgba(240, 196, 106, 0.9)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function editorPickObject(world) {
+  const candidates = [];
+  const add = (type, id, x, y, name, radius = 1) => {
+    const d = Math.hypot(world.x - x, world.y - y);
+    if (d <= radius) candidates.push({ type, id, x, y, name, d });
+  };
+
+  for (const enemyState of state.enemies) if (!enemyState.dead) add("enemy", enemyState.sprite, enemyState.x, enemyState.y, enemyState.name, 1.1);
+  for (const loot of state.loot) add("item", loot.id, loot.x, loot.y, itemName(loot.id), 0.9);
+  for (const instance of getEditorPrefabInstances(visibleTileBounds(4))) {
+    for (const [index, item] of instance.prefab.items.entries()) {
+      if (instance.deletedItems?.includes(index)) continue;
+      if (!editorLayerVisible(item.layer)) continue;
+      const before = candidates.length;
+      add(item.type, item.id, instance.x + (item.dx || 0), instance.y + (item.dy || 0), editorAssetName(item), 0.65);
+      if (candidates.length > before) {
+        Object.assign(candidates[candidates.length - 1], {
+          placementId: instance.placementId,
+          itemIndex: index,
+          manual: instance.manual
+        });
+      }
+    }
+  }
+  if (state.editor.draft.anchor) {
+    for (const [index, item] of state.editor.draft.items.entries()) {
+      if (!editorLayerVisible(item.layer)) continue;
+      const before = candidates.length;
+      add(item.type, item.id, state.editor.draft.anchor.x + (item.dx || 0), state.editor.draft.anchor.y + (item.dy || 0), editorAssetName(item), 0.65);
+      if (candidates.length > before) candidates[candidates.length - 1].draftIndex = index;
+    }
+  }
+  for (const building of state.buildings) {
+    if (building.biomeAsset) add("biome", building.biomeAsset, building.x + building.w / 2, building.y + building.h / 2, building.name, 2.2);
+  }
+
+  const minX = Math.floor(world.x - 2);
+  const maxX = Math.ceil(world.x + 2);
+  const minY = Math.floor(world.y - 2);
+  const maxY = Math.ceil(world.y + 2);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const tile = tileFromSeed(x, y);
+      if (tile?.prop && !isDestroyedProp(tile.prop, x, y)) {
+        const before = candidates.length;
+        add("biome", tile.prop, x, y, tile.prop.replaceAll("_", " "), 0.95);
+        if (candidates.length > before) Object.assign(candidates[candidates.length - 1], { generatedProp: true, propX: x, propY: y });
+      }
+      if (tile?.forest && !tile.water) add("forest", "cluster", x, y, "Forest cluster", 1.2);
+    }
+  }
+
+  return candidates.sort((a, b) => a.d - b.d)[0] || null;
+}
+
+function editorPickDraftItem(world) {
+  const anchor = state.editor.draft.anchor;
+  if (!anchor) return null;
+  return state.editor.draft.items
+    .map((item, index) => ({
+      item,
+      index,
+      x: anchor.x + (item.dx || 0),
+      y: anchor.y + (item.dy || 0),
+      d: Math.hypot(world.x - (anchor.x + (item.dx || 0)), world.y - (anchor.y + (item.dy || 0)))
+    }))
+    .filter(candidate => candidate.d <= 1.1)
+    .sort((a, b) => b.index - a.index || a.d - b.d)[0] || null;
+}
+
+function editorDraftSelection(index) {
+  const item = state.editor.draft.items[index];
+  const anchor = state.editor.draft.anchor;
+  if (!item || !anchor) return null;
+  return {
+    type: item.type,
+    id: item.id,
+    x: anchor.x + (item.dx || 0),
+    y: anchor.y + (item.dy || 0),
+    itemScale: item.itemScale,
+    rotation: item.rotation,
+    flipX: item.flipX,
+    wallGroupId: item.wallGroupId,
+    wallSide: item.wallSide,
+    wallRole: item.wallRole,
+    wallSpacing: item.wallSpacing,
+    draftIndex: index
+  };
+}
+
+function editorDragRect() {
+  if (!editorRectSelectDrag) return null;
+  const x = Math.min(editorRectSelectDrag.startX, editorRectSelectDrag.x);
+  const y = Math.min(editorRectSelectDrag.startY, editorRectSelectDrag.y);
+  return {
+    x,
+    y,
+    width: Math.abs(editorRectSelectDrag.x - editorRectSelectDrag.startX),
+    height: Math.abs(editorRectSelectDrag.y - editorRectSelectDrag.startY)
+  };
+}
+
+function editorSelectDraftItemsInRect(rect) {
+  const anchor = state.editor.draft.anchor;
+  const items = state.editor.draft.items || [];
+  if (!anchor || !items.length) {
+    state.editor.selectedDraftIndexes = [];
+    state.editor.selected = null;
+    updateEditorSelectedUi();
+    return;
+  }
+  const indexes = [];
+  items.forEach((item, index) => {
+    const p = worldToScreen(anchor.x + (item.dx || 0), anchor.y + (item.dy || 0));
+    if (p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height) {
+      indexes.push(index);
+    }
+  });
+  state.editor.selectedDraftIndexes = indexes;
+  state.editor.selected = indexes.length === 1 ? editorDraftSelection(indexes[0]) : null;
+  updateEditorSelectedUi();
+  if (indexes.length) toast(`${indexes.length} item${indexes.length === 1 ? "" : "s"} selected.`);
+}
+
+function handleEditorPointerDown(event) {
+  if (!state.editor.open) return;
+  const rect = canvas.getBoundingClientRect();
+  const sx = event.clientX - rect.left;
+  const sy = event.clientY - rect.top;
+  const world = screenToWorld(sx, sy);
+  if (state.editor.planView) {
+    if (event.button !== 0) return;
+    placePlanViewMarker(world);
+    suppressNextCanvasClick = true;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+
+  if (state.editor.placingPrefabId) {
+    if (event.button !== 0) return;
+    placeEditorPrefab(state.editor.placingPrefabId, world.x, world.y);
+    state.editor.selectedDraftIndexes = [];
+    suppressNextCanvasClick = true;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+
+  if (event.button === 2) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+  if (event.button !== 0) return;
+
+  if (state.editor.lineMode) {
+    editorLineDrag = {
+      pointerId: event.pointerId,
+      startWorld: world,
+      currentWorld: world,
+      startScreen: { x: sx, y: sy },
+      x: sx,
+      y: sy
+    };
+    state.editor.selected = null;
+    state.editor.selectedDraftIndexes = [];
+    hideEditorContextMenu();
+    updateEditorSelectedUi();
+    canvas.setPointerCapture?.(event.pointerId);
+    suppressNextCanvasClick = true;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+
+  if (editorHandleHit(sx, sy)) {
+    const selected = state.editor.selected;
+    editorResizeDrag = {
+      pointerId: event.pointerId,
+      type: selected.type,
+      id: selected.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      startScale: editorScaleFor(selected.type, selected.id)
+    };
+    canvas.setPointerCapture?.(event.pointerId);
+    suppressNextCanvasClick = true;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+
+  const draftItem = editorPickDraftItem(world);
+  if (draftItem) {
+    state.editor.selected = editorDraftSelection(draftItem.index);
+    const selectedIndexes = state.editor.selectedDraftIndexes || [];
+    const wallGroupIndexes = isWallEditorItem(draftItem.item) && !event.altKey
+      ? editorWallGroupIndexes(draftItem.item.wallGroupId)
+      : [];
+    let indexes = [draftItem.index];
+    if (selectedIndexes.includes(draftItem.index) && selectedIndexes.length > 1) {
+      indexes = selectedIndexes;
+    } else if (wallGroupIndexes.length) {
+      indexes = wallGroupIndexes;
+    }
+    state.editor.selectedDraftIndexes = indexes;
+    editorDraftMoveDrag = {
+      pointerId: event.pointerId,
+      index: draftItem.index,
+      indexes,
+      startWorld: world,
+      starts: indexes.map(index => {
+        const item = state.editor.draft.items[index];
+        return { index, dx: item?.dx || 0, dy: item?.dy || 0 };
+      })
+    };
+    updateEditorSelectedUi();
+    canvas.setPointerCapture?.(event.pointerId);
+    suppressNextCanvasClick = true;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+
+  const picked = editorPickObject(world);
+  if (picked) {
+    state.editor.selected = picked;
+    state.editor.selectedDraftIndexes = Number.isInteger(picked.draftIndex) ? [picked.draftIndex] : [];
+    updateEditorSelectedUi();
+    suppressNextCanvasClick = true;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
+
+  state.editor.selected = null;
+  state.editor.selectedDraftIndexes = [];
+  editorRectSelectDrag = {
+    pointerId: event.pointerId,
+    startX: sx,
+    startY: sy,
+    x: sx,
+    y: sy
+  };
+  updateEditorSelectedUi();
+  canvas.setPointerCapture?.(event.pointerId);
+  suppressNextCanvasClick = true;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+function placePlanViewMarker(world) {
+  state.editor.planDraft.anchor = { x: world.x, y: world.y };
+  state.editor.selected = null;
+  state.editor.selectedDraftIndexes = [];
+  updateEditorSelectedUi();
+  saveGame(true);
+  toast("Plan center marker placed.");
+}
+
+function handleEditorPointerMove(event) {
+  if (state.editor.planView) return;
+  if (editorLineDrag && editorLineDrag.pointerId === event.pointerId) {
+    const rect = canvas.getBoundingClientRect();
+    editorLineDrag.x = event.clientX - rect.left;
+    editorLineDrag.y = event.clientY - rect.top;
+    editorLineDrag.currentWorld = screenToWorld(editorLineDrag.x, editorLineDrag.y);
+    event.preventDefault();
+    return;
+  }
+  if (handleEditorDraftMove(event)) return;
+  if (editorRectSelectDrag && editorRectSelectDrag.pointerId === event.pointerId) {
+    const rect = canvas.getBoundingClientRect();
+    editorRectSelectDrag.x = event.clientX - rect.left;
+    editorRectSelectDrag.y = event.clientY - rect.top;
+    event.preventDefault();
+    return;
+  }
+  if (!editorResizeDrag || editorResizeDrag.pointerId !== event.pointerId) return;
+  const delta = (event.clientX - editorResizeDrag.startX) - (event.clientY - editorResizeDrag.startY);
+  setEditorScale(editorResizeDrag.type, editorResizeDrag.id, editorResizeDrag.startScale * (1 + delta / 140));
+  event.preventDefault();
+}
+
+function handleEditorDraftMove(event) {
+  if (!editorDraftMoveDrag || editorDraftMoveDrag.pointerId !== event.pointerId) return false;
+  const rect = canvas.getBoundingClientRect();
+  const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+  const deltaX = world.x - editorDraftMoveDrag.startWorld.x;
+  const deltaY = world.y - editorDraftMoveDrag.startWorld.y;
+  for (const start of editorDraftMoveDrag.starts || []) {
+    const item = state.editor.draft.items[start.index];
+    if (!item) continue;
+    item.dx = start.dx + deltaX;
+    item.dy = start.dy + deltaY;
+  }
+  state.editor.selected = editorDraftSelection(editorDraftMoveDrag.index);
+  updateEditorSelectedUi();
+  event.preventDefault();
+  return true;
+}
+
+function handleEditorPointerUp(event) {
+  if (editorLineDrag && editorLineDrag.pointerId === event.pointerId) {
+    const drag = editorLineDrag;
+    editorLineDrag = null;
+    canvas.releasePointerCapture?.(event.pointerId);
+    if (Math.hypot(drag.currentWorld.x - drag.startWorld.x, drag.currentWorld.y - drag.startWorld.y) >= 0.12) {
+      if (state.editor.lineShape === "wall") commitEditorWall(drag.startWorld, drag.currentWorld);
+      else commitEditorLine(drag.startWorld, drag.currentWorld);
+    }
+    event.preventDefault();
+    return;
+  }
+  if (editorDraftMoveDrag && editorDraftMoveDrag.pointerId === event.pointerId) {
+    editorDraftMoveDrag = null;
+    canvas.releasePointerCapture?.(event.pointerId);
+    saveGame(true);
+    event.preventDefault();
+    return;
+  }
+  if (editorRectSelectDrag && editorRectSelectDrag.pointerId === event.pointerId) {
+    const rect = editorDragRect();
+    const shouldSelect = rect && Math.hypot(rect.width, rect.height) >= 8;
+    editorRectSelectDrag = null;
+    canvas.releasePointerCapture?.(event.pointerId);
+    if (shouldSelect) editorSelectDraftItemsInRect(rect);
+    else updateEditorSelectedUi();
+    event.preventDefault();
+    return;
+  }
+  if (!editorResizeDrag || editorResizeDrag.pointerId !== event.pointerId) return;
+  editorResizeDrag = null;
+  canvas.releasePointerCapture?.(event.pointerId);
+  saveGame(true);
+  event.preventDefault();
+}
+
 function startCameraDrag(event) {
+  if (state.editor.open && (state.editor.placingPrefabId || state.editor.selected)) return;
   if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
   if (event.button !== 0) event.preventDefault();
   cameraDrag = {
@@ -4057,6 +6422,7 @@ function handleCanvasClick(event) {
     suppressNextCanvasClick = false;
     return;
   }
+  if (state.editor.open) return;
   const rect = canvas.getBoundingClientRect();
   const sx = event.clientX - rect.left;
   const sy = event.clientY - rect.top;
@@ -4076,12 +6442,376 @@ function handleCanvasClick(event) {
   }
 }
 
+function hideEditorContextMenu() {
+  const menu = document.getElementById("editorContextMenu");
+  if (menu) menu.hidden = true;
+  state.editor.contextTarget = null;
+}
+
+function showEditorContextMenu(event, target) {
+  const menu = document.getElementById("editorContextMenu");
+  if (!menu || !target) return;
+  state.editor.contextTarget = target;
+  const wallItem = Number.isInteger(target.draftIndex) ? state.editor.draft.items[target.draftIndex] : null;
+  const wallOnly = isWallEditorItem(wallItem);
+  ["editorContextCycleWall", "editorContextResizeWall", "editorContextSelectWallSide", "editorContextSelectWallGroup"].forEach(id => {
+    const button = document.getElementById(id);
+    if (button) button.hidden = !wallOnly;
+  });
+  const cycleButton = document.getElementById("editorContextCycleWall");
+  if (cycleButton && wallOnly) {
+    cycleButton.textContent = wallItem.id === WALL_SPRITES.gate ? "Replace With Segment" : "Replace With Gate";
+    cycleButton.hidden = !(wallItem.wallSide === "front" || wallItem.wallSide === "gate");
+  }
+  menu.style.left = `${event.clientX}px`;
+  menu.style.top = `${event.clientY}px`;
+  menu.hidden = false;
+}
+
+function deleteEditorTarget(target = state.editor.contextTarget || state.editor.selected) {
+  if (!target) return;
+  if (Number.isInteger(target.draftIndex)) {
+    const indexes = (state.editor.selectedDraftIndexes || []).length > 1 && state.editor.selectedDraftIndexes.includes(target.draftIndex)
+      ? state.editor.selectedDraftIndexes
+      : [target.draftIndex];
+    removeDraftItems(indexes);
+    hideEditorContextMenu();
+    toast("Removed from draft.");
+    return;
+  }
+  if (target.placementId && Number.isInteger(target.itemIndex)) {
+    const placement = state.editor.placements.find(entry => entry.id === target.placementId);
+    if (placement) {
+      placement.deletedItems = [...new Set([...(placement.deletedItems || []), target.itemIndex])];
+      state.editor.selected = null;
+      saveGame(true);
+      hideEditorContextMenu();
+      toast("Removed placed sprite.");
+      return;
+    }
+  }
+  if (target.generatedProp) {
+    state.worldEdits[worldEditKey("prop", propWorldId(target.id, target.propX, target.propY))] = { dead: true };
+    state.editor.selected = null;
+    saveGame(true);
+    hideEditorContextMenu();
+    toast("Removed world sprite.");
+  }
+}
+
+function handleEditorContextMenu(event) {
+  if (!state.editor.open || state.editor.planView) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const rect = canvas.getBoundingClientRect();
+  const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+  const draftItem = editorPickDraftItem(world);
+  const target = draftItem
+    ? editorDraftSelection(draftItem.index)
+    : editorPickObject(world);
+  if (!target) {
+    hideEditorContextMenu();
+    return;
+  }
+  state.editor.selected = target;
+  state.editor.selectedDraftIndexes = Number.isInteger(target.draftIndex) ? [target.draftIndex] : [];
+  updateEditorSelectedUi();
+  showEditorContextMenu(event, target);
+}
+
+function handleEditorDoubleClick(event) {
+  if (!state.editor.open || state.editor.lineMode || state.editor.planView) return;
+  const rect = canvas.getBoundingClientRect();
+  const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+  const draftItem = editorPickDraftItem(world);
+  if (!draftItem || !isWallEditorItem(draftItem.item)) return;
+  state.editor.selected = editorDraftSelection(draftItem.index);
+  if (event.shiftKey) selectWallGroupFromTarget(state.editor.selected);
+  else selectWallSideFromTarget(state.editor.selected);
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+function handleEditorWallWheel(event) {
+  return false;
+}
+
+function handleEditorWallArrowKey(event, key) {
+  if (!state.editor.open || state.editor.lineMode || state.editor.placingPrefabId) return false;
+  if (!["arrowright", "arrowleft", "arrowup", "arrowdown"].includes(key)) return false;
+  const groupId = activeWallGroupId();
+  if (!groupId) return false;
+  if (key === "arrowright" && resizeWallGroup(groupId, 1)) toast("Increased wall by one tile per side.");
+  else if (key === "arrowleft" && resizeWallGroup(groupId, -1)) toast("Reduced wall by one tile per side.");
+  else if (key === "arrowup" && adjustWallGroupSpacing(groupId, 1)) toast(`Wall spacing: every ${wallGroupSpacing(groupId)} tile${wallGroupSpacing(groupId) === 1 ? "" : "s"}.`);
+  else if (key === "arrowdown" && adjustWallGroupSpacing(groupId, -1)) toast(`Wall spacing: every ${wallGroupSpacing(groupId)} tile${wallGroupSpacing(groupId) === 1 ? "" : "s"}.`);
+  else return false;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  return true;
+}
+
+function toggleEditor(forceOpen = null) {
+  state.editor.open = forceOpen ?? !state.editor.open;
+  if (!state.editor.open) {
+    state.editor.placingPrefabId = null;
+    state.editor.selected = null;
+    state.editor.selectedDraftIndexes = [];
+    editorDraftMoveDrag = null;
+    editorResizeDrag = null;
+    editorRectSelectDrag = null;
+    editorLineDrag = null;
+    editorPlanPainting = false;
+    hideEditorContextMenu();
+  }
+  renderEditorPanel();
+}
+
+function bindEditorEvents() {
+  document.getElementById("editorToggle").addEventListener("click", () => toggleEditor());
+  document.getElementById("closeEditor").addEventListener("click", () => toggleEditor(false));
+  const scaleInput = document.getElementById("editorScaleInput");
+  scaleInput.addEventListener("change", () => {
+    const selected = state.editor.selected;
+    if (selected) setEditorScale(selected.type, selected.id, scaleInput.value);
+  });
+  document.getElementById("editorLineModeToggle")?.addEventListener("click", () => {
+    state.editor.lineMode = !state.editor.lineMode;
+    if (state.editor.lineMode) state.editor.planView = false;
+    state.editor.placingPrefabId = null;
+    hideEditorContextMenu();
+    renderEditorPanel();
+  });
+  document.getElementById("editorPlanViewToggle")?.addEventListener("click", () => {
+    state.editor.planView = !state.editor.planView;
+    if (state.editor.planView) {
+      state.editor.lineMode = false;
+      state.editor.placingPrefabId = null;
+    }
+    hideEditorContextMenu();
+    renderEditorPanel();
+  });
+  document.getElementById("editorLineCategory")?.addEventListener("change", event => {
+    state.editor.lineCategory = event.target.value;
+    updateEditorSelectedUi();
+  });
+  document.getElementById("editorLineShape")?.addEventListener("change", event => {
+    state.editor.lineShape = ["straight", "curved", "circle", "wall"].includes(event.target.value) ? event.target.value : "straight";
+    updateEditorSelectedUi();
+  });
+  document.getElementById("editorBrushDensity")?.addEventListener("input", event => {
+    state.editor.brushDensity = clamp(Number(event.target.value) || 4, 1, 10);
+    updateEditorSelectedUi();
+  });
+  document.getElementById("editorScatterFill")?.addEventListener("click", scatterFillEditorDraft);
+  document.getElementById("editorVariantCluster")?.addEventListener("click", saveVariantFromSelection);
+  document.getElementById("editorPlanTileset")?.addEventListener("change", event => {
+    state.editor.planDraft.tileset = PLAN_TILESET_DEFS[event.target.value] ? event.target.value : "village";
+    renderEditorPlanTools();
+    saveGame(true);
+  });
+  document.getElementById("savePlanSpawn")?.addEventListener("click", saveCurrentPlan);
+  document.getElementById("savePlanViewModal")?.addEventListener("click", saveCurrentPlan);
+  document.getElementById("newPlanViewModal")?.addEventListener("click", newPlanDraft);
+  document.getElementById("loadPlanViewModal")?.addEventListener("click", loadSelectedPlanView);
+  document.getElementById("clearPlanDraft")?.addEventListener("click", clearEditorPlanDraft);
+  document.getElementById("applyPlanGridSize")?.addEventListener("click", applyPlanGridSize);
+  document.getElementById("closePlanModal")?.addEventListener("click", () => {
+    state.editor.planView = false;
+    renderEditorPanel();
+    saveGame(true);
+  });
+  document.getElementById("loadPlanTilesetImage")?.addEventListener("click", () => document.getElementById("planTilesetImageInput")?.click());
+  document.getElementById("loadPlanWallImage")?.addEventListener("click", () => document.getElementById("planWallImageInput")?.click());
+  document.getElementById("planTilesetImageInput")?.addEventListener("change", event => handlePlanTilesetUpload(event.target, "main"));
+  document.getElementById("planWallImageInput")?.addEventListener("change", event => handlePlanTilesetUpload(event.target, "walls"));
+  const planCanvas = document.getElementById("editorPlanCanvas");
+  planCanvas?.addEventListener("pointerdown", event => {
+    if (event.button === 2) {
+      erasePlanCellFromEvent(event);
+      event.preventDefault();
+      return;
+    }
+    editorPlanPainting = true;
+    planCanvas.setPointerCapture?.(event.pointerId);
+    paintPlanFromEvent(event);
+    event.preventDefault();
+  });
+  planCanvas?.addEventListener("pointermove", event => {
+    if (!editorPlanPainting) return;
+    paintPlanFromEvent(event);
+    event.preventDefault();
+  });
+  planCanvas?.addEventListener("pointerup", event => {
+    editorPlanPainting = false;
+    planCanvas.releasePointerCapture?.(event.pointerId);
+    saveGame(true);
+  });
+  planCanvas?.addEventListener("pointercancel", () => {
+    editorPlanPainting = false;
+  });
+  planCanvas?.addEventListener("contextmenu", event => {
+    erasePlanCellFromEvent(event);
+    event.preventDefault();
+  });
+  const planModal = document.getElementById("editorPlanModal");
+  const planModalHeader = document.getElementById("editorPlanModalHeader");
+  planModalHeader?.addEventListener("pointerdown", event => {
+    if (event.target.closest("button")) return;
+    const rect = planModal.getBoundingClientRect();
+    editorPlanModalDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      modalX: rect.left,
+      modalY: rect.top
+    };
+    planModalHeader.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  planModalHeader?.addEventListener("pointermove", event => {
+    if (!editorPlanModalDrag || editorPlanModalDrag.pointerId !== event.pointerId) return;
+    state.editor.planModal.x = editorPlanModalDrag.modalX + event.clientX - editorPlanModalDrag.startX;
+    state.editor.planModal.y = editorPlanModalDrag.modalY + event.clientY - editorPlanModalDrag.startY;
+    applyPlanModalLayout();
+    event.preventDefault();
+  });
+  const endPlanModalDrag = event => {
+    if (!editorPlanModalDrag || editorPlanModalDrag.pointerId !== event.pointerId) return;
+    editorPlanModalDrag = null;
+    planModalHeader.releasePointerCapture?.(event.pointerId);
+    saveGame(true);
+  };
+  planModalHeader?.addEventListener("pointerup", endPlanModalDrag);
+  planModalHeader?.addEventListener("pointercancel", endPlanModalDrag);
+  planModal?.addEventListener("pointerup", () => {
+    syncPlanModalSize();
+    drawPlanCanvas();
+    saveGame(true);
+  });
+  if (typeof ResizeObserver === "function" && planModal) {
+    const observer = new ResizeObserver(() => {
+      syncPlanModalSize();
+      drawPlanCanvas();
+    });
+    observer.observe(planModal);
+  }
+  document.getElementById("editorContextDelete")?.addEventListener("click", () => deleteEditorTarget());
+  document.getElementById("editorContextCycleWall")?.addEventListener("click", () => {
+    if (cycleWallTarget()) hideEditorContextMenu();
+  });
+  document.getElementById("editorContextResizeWall")?.addEventListener("click", () => resizeWallGroupFromMenu());
+  document.getElementById("editorContextSelectWallSide")?.addEventListener("click", () => selectWallSideFromTarget());
+  document.getElementById("editorContextSelectWallGroup")?.addEventListener("click", () => selectWallGroupFromTarget());
+  document.addEventListener("pointerdown", event => {
+    const menu = document.getElementById("editorContextMenu");
+    if (menu && !menu.hidden && !menu.contains(event.target)) hideEditorContextMenu();
+  });
+
+  const nameInput = document.getElementById("editorPrefabName");
+  nameInput.addEventListener("input", () => {
+    if (state.editor.planView) state.editor.planDraft.name = nameInput.value;
+    else state.editor.draft.name = nameInput.value;
+  });
+  const occurrence = document.getElementById("editorOccurrence");
+  occurrence.addEventListener("input", () => {
+    const value = clamp(Number(occurrence.value) || 4, 1, 10);
+    if (state.editor.planView) state.editor.planDraft.occurrence = value;
+    else state.editor.draft.occurrence = value;
+    document.getElementById("editorOccurrenceValue").textContent = value;
+  });
+  const layer = document.getElementById("editorLayer");
+  layer.addEventListener("change", () => {
+    state.editor.activeLayer = normalizeEditorLayer(layer.value);
+    if ((state.editor.selectedDraftIndexes || []).length > 1) {
+      for (const index of state.editor.selectedDraftIndexes) {
+        const item = state.editor.draft.items[index];
+        if (item) item.layer = state.editor.activeLayer;
+      }
+      renderEditorDraft();
+      saveGame(true);
+      return;
+    }
+    if (Number.isInteger(state.editor.selected?.draftIndex)) {
+      const item = state.editor.draft.items[state.editor.selected.draftIndex];
+      if (item) {
+        item.layer = state.editor.activeLayer;
+        renderEditorDraft();
+        saveGame(true);
+      }
+    }
+  });
+  document.querySelectorAll("[data-editor-layer-visible]").forEach(input => {
+    input.addEventListener("change", () => {
+      const layerName = normalizeEditorLayer(input.dataset.editorLayerVisible);
+      state.editor.layerVisibility[layerName] = input.checked;
+      updateEditorSelectedUi();
+      renderEditorDraft();
+      saveGame(true);
+    });
+  });
+
+  const dropZone = document.getElementById("editorDropZone");
+  dropZone.addEventListener("dragover", event => {
+    event.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", event => {
+    event.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const raw = event.dataTransfer.getData("application/json");
+    if (!raw) return;
+    try {
+      const hero = activeHero();
+      addAssetToDraft(JSON.parse(raw), { x: hero.x + 1.5, y: hero.y + 1.5 });
+    } catch (error) {
+      console.warn("Prefab drop failed.", error);
+    }
+  });
+
+  document.getElementById("savePrefab").addEventListener("click", saveCurrentPrefab);
+  document.getElementById("saveSelectionPrefab").addEventListener("click", saveSelectionPrefab);
+  document.getElementById("clearPrefabDraft").addEventListener("click", clearEditorDraft);
+  canvas.addEventListener("dragover", event => {
+    if (!state.editor.open) return;
+    event.preventDefault();
+  });
+  canvas.addEventListener("drop", event => {
+    if (!state.editor.open) return;
+    event.preventDefault();
+    const raw = event.dataTransfer.getData("application/json");
+    if (!raw) return;
+    const rect = canvas.getBoundingClientRect();
+    const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+    try {
+      addAssetToDraft(JSON.parse(raw), world);
+      toast("Item added to set.");
+    } catch (error) {
+      console.warn("Map drop failed.", error);
+    }
+  });
+  canvas.addEventListener("pointerdown", handleEditorPointerDown);
+  canvas.addEventListener("pointermove", handleEditorPointerMove);
+  canvas.addEventListener("pointerup", handleEditorPointerUp);
+  canvas.addEventListener("pointercancel", handleEditorPointerUp);
+  canvas.addEventListener("contextmenu", handleEditorContextMenu);
+  canvas.addEventListener("dblclick", handleEditorDoubleClick);
+}
+
 function bindEvents() {
   addEventListener("resize", resize);
   addEventListener("pointerdown", requestGameMusicStart, { capture: true });
   addEventListener("keydown", event => {
     requestGameMusicStart();
     const key = event.key.toLowerCase();
+    const typing = ["input", "textarea", "select"].includes(document.activeElement?.tagName?.toLowerCase());
+    if (!typing && handleEditorWallArrowKey(event, key)) return;
+    if (state.editor.open && !typing && (key === "delete" || key === "backspace")) {
+      event.preventDefault();
+      deleteEditorTarget(state.editor.selected);
+      return;
+    }
     state.keys.add(key);
     if (["1", "2", "3", "4", "5", "6"].includes(key)) activateHotbarSlot(Number(key) - 1);
     if (["f1", "f2", "f3"].includes(key)) {
@@ -4101,6 +6831,7 @@ function bindEvents() {
     if (key === "r") useItem("bluePotion");
     if (key === "i") toggleInventory();
     if (key === "p") toggleProgression();
+    if (key === "l") toggleEditor();
     if (key === "m") enableFollowCamera();
     if (key === "e") {
       const npc = nearestNpc();
@@ -4109,6 +6840,7 @@ function bindEvents() {
     }
   });
   addEventListener("keyup", event => state.keys.delete(event.key.toLowerCase()));
+  bindEditorEvents();
   canvas.addEventListener("click", handleCanvasClick);
   canvas.addEventListener("contextmenu", event => event.preventDefault());
   canvas.addEventListener("pointerdown", startCameraDrag);
@@ -4116,6 +6848,7 @@ function bindEvents() {
   canvas.addEventListener("pointerup", endCameraDrag);
   canvas.addEventListener("pointercancel", endCameraDrag);
   canvas.addEventListener("wheel", event => {
+    if (handleEditorWallWheel(event)) return;
     event.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const factor = Math.exp(-event.deltaY * 0.0015);
@@ -4170,10 +6903,12 @@ async function start() {
   bindEvents();
   renderInventory();
   renderProgression();
+  renderEditorPanel();
   renderHud();
   await loadAssets();
   renderInventory();
   renderProgression();
+  renderEditorPanel();
   drawMiniMapThrottled(true);
   requestAnimationFrame(loop);
 }

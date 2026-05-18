@@ -55,6 +55,7 @@
 
     <button id="restartGame" class="restart-button panel-metal" type="button" title="Restart game">Restart</button>
     <button id="progressionToggle" class="progression-toggle panel-metal" type="button" title="Progression">P</button>
+    <button id="editorToggle" class="editor-toggle panel-metal" type="button" title="Level editor">Editor</button>
 
     <aside id="progressionPanel" class="progression-panel framed-panel collapsed" aria-label="Progression">
       <div class="panel-frame frame-top"></div>
@@ -166,6 +167,125 @@
       </form>
     </section>
 
+    <aside id="editorPanel" class="editor-panel panel-metal collapsed" aria-label="Level editor">
+      <header>
+        <strong>Level Editor</strong>
+        <button id="closeEditor" class="close-button" title="Close editor">X</button>
+      </header>
+      <div class="editor-selected editor-section">
+        <span id="editorSelectedName">Select an object on the map</span>
+        <label>Scale <input id="editorScaleInput" type="number" min="0.25" max="4" step="0.05" value="1"></label>
+      </div>
+      <div class="editor-line-tools editor-section" aria-label="Line placement controls">
+        <button id="editorLineModeToggle" class="editor-line-toggle" type="button" aria-pressed="false">Line Mode</button>
+        <button id="editorPlanViewToggle" class="editor-line-toggle" type="button" aria-pressed="false">Plan View</button>
+        <label>Random
+          <select id="editorLineCategory">
+            <option value="village">Village</option>
+            <option value="ruins">Ruins</option>
+            <option value="forest">Plants / Forest</option>
+            <option value="rubble">Rocks / Rubble</option>
+            <option value="biome">Biome Aware</option>
+            <option value="mixed" selected>Mixed</option>
+          </select>
+        </label>
+        <label>Tool
+          <select id="editorLineShape">
+            <option value="straight" selected>Straight</option>
+            <option value="curved">Curved</option>
+            <option value="circle">Circle</option>
+            <option value="wall">Wall</option>
+          </select>
+        </label>
+        <label>Density <input id="editorBrushDensity" type="range" min="1" max="10" value="4"></label>
+        <span id="editorBrushDensityValue">4</span>
+        <div class="editor-mini-actions">
+          <button id="editorScatterFill" type="button">Scatter Fill</button>
+          <button id="editorVariantCluster" type="button">Variant</button>
+        </div>
+        <div id="editorLineStatus" class="editor-line-status" role="status">Line mode off. Select items or drag from the palette.</div>
+      </div>
+      <div id="editorPlanTools" class="editor-plan-tools editor-section" aria-label="Plan view controls" hidden>
+        <label>Tileset
+          <select id="editorPlanTileset">
+            <option value="village" selected>Village</option>
+            <option value="ruins">Ruins</option>
+            <option value="castle">Castle</option>
+            <option value="graveyard">Graveyard</option>
+            <option value="dungeon">Dungeon</option>
+            <option value="undead">Undead</option>
+          </select>
+        </label>
+        <div id="editorPlanBrushes" class="editor-plan-brushes" aria-label="Plan paint brushes"></div>
+        <div class="editor-mini-actions">
+          <button id="loadPlanTilesetImage" type="button">Load Tiles</button>
+          <button id="loadPlanWallImage" type="button">Load Walls</button>
+        </div>
+        <input id="planTilesetImageInput" type="file" accept="image/*" hidden>
+        <input id="planWallImageInput" type="file" accept="image/*" hidden>
+        <div class="editor-mini-actions">
+          <button id="savePlanSpawn" type="button">Save View</button>
+          <button id="clearPlanDraft" type="button">Clear Plan</button>
+        </div>
+        <div id="editorPlanStatus" class="editor-line-status" role="status"></div>
+      </div>
+      <div class="editor-prefab-form editor-section">
+        <input id="editorPrefabName" maxlength="28" value="New Set" aria-label="Prefab name">
+        <label>Layer
+          <select id="editorLayer">
+            <option value="ground">Ground</option>
+            <option value="building" selected>Building</option>
+            <option value="vegetation">Vegetation</option>
+          </select>
+        </label>
+        <div class="editor-layer-toggles" aria-label="Layer visibility">
+          <label><input type="checkbox" data-editor-layer-visible="ground" checked> Ground</label>
+          <label><input type="checkbox" data-editor-layer-visible="building" checked> Building</label>
+          <label><input type="checkbox" data-editor-layer-visible="vegetation" checked> Vegetation</label>
+        </div>
+        <label>Occurrence <input id="editorOccurrence" type="range" min="1" max="10" value="4"></label>
+        <span id="editorOccurrenceValue">4</span>
+      </div>
+      <div id="editorPalette" class="editor-palette" aria-label="Editor asset palette"></div>
+      <div id="editorDropZone" class="editor-drop-zone">Drag items onto the map to arrange a set</div>
+      <div id="editorDraftItems" class="editor-draft-items"></div>
+      <div class="editor-actions">
+        <button id="savePrefab" type="button">Save Set</button>
+        <button id="saveSelectionPrefab" type="button">Save Selection</button>
+        <button id="clearPrefabDraft" type="button">Clear</button>
+      </div>
+      <div id="savedPrefabs" class="saved-prefabs"></div>
+    </aside>
+    <section id="editorPlanModal" class="editor-plan-modal panel-metal" aria-label="Plan view paint window" hidden>
+      <header id="editorPlanModalHeader">
+        <strong>Plan View</strong>
+        <button id="closePlanModal" class="close-button" title="Close plan view">X</button>
+      </header>
+      <div class="plan-modal-controls">
+        <label>Width <input id="editorPlanWidth" type="number" min="4" max="24" step="1" value="12"></label>
+        <label>Height <input id="editorPlanHeight" type="number" min="4" max="24" step="1" value="12"></label>
+        <button id="applyPlanGridSize" type="button">Apply Size</button>
+      </div>
+      <div class="plan-modal-actions">
+        <button id="newPlanViewModal" type="button">New View</button>
+        <button id="savePlanViewModal" type="button">Save View</button>
+        <select id="editorPlanLoadSelect" aria-label="Load saved plan view"></select>
+        <button id="loadPlanViewModal" type="button">Load View</button>
+      </div>
+      <canvas id="editorPlanCanvas" width="480" height="480" aria-label="Top down plan paint grid"></canvas>
+      <div class="plan-modal-footer">
+        <strong>Saved Plans</strong>
+        <div id="savedPlanViews" class="saved-plan-views"></div>
+      </div>
+    </section>
+    <div id="editorContextMenu" class="editor-context-menu" role="menu" hidden>
+      <button id="editorContextDelete" type="button" role="menuitem">Delete</button>
+      <button id="editorContextCycleWall" type="button" role="menuitem">Swap Wall Tile</button>
+      <button id="editorContextResizeWall" type="button" role="menuitem">Resize Wall Group</button>
+      <button id="editorContextSelectWallSide" type="button" role="menuitem">Select Matching Side</button>
+      <button id="editorContextSelectWallGroup" type="button" role="menuitem">Select Whole Wall</button>
+    </div>
+
     <div id="lootToast" class="loot-toast"></div>
     <div id="castLayer" class="cast-layer"></div>
 
@@ -186,7 +306,7 @@
     </footer>
 
     <div class="hint-line">
-      WASD move, Tab/F1-F3 switch hero, mouse wheel zoom, click targets, E talk/enter, I inventory, P progression, drag items, 1-6 skills, Space attack
+      WASD move, Tab/F1-F3 switch hero, mouse wheel zoom, click targets, E talk/enter, I inventory, P progression, L editor, line/curve/circle/wall draw, double-click wall side, arrows resize/space wall, scatter fill, variants, right-click delete, 1-6 skills, Space attack
     </div>
   </div>
 
