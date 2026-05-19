@@ -205,30 +205,6 @@
         </div>
         <div id="editorLineStatus" class="editor-line-status" role="status">Line mode off. Select items or drag from the palette.</div>
       </div>
-      <div id="editorPlanTools" class="editor-plan-tools editor-section" aria-label="Plan view controls" hidden>
-        <label>Tileset
-          <select id="editorPlanTileset">
-            <option value="village" selected>Village</option>
-            <option value="ruins">Ruins</option>
-            <option value="castle">Castle</option>
-            <option value="graveyard">Graveyard</option>
-            <option value="dungeon">Dungeon</option>
-            <option value="undead">Undead</option>
-          </select>
-        </label>
-        <div id="editorPlanBrushes" class="editor-plan-brushes" aria-label="Plan paint brushes"></div>
-        <div class="editor-mini-actions">
-          <button id="loadPlanTilesetImage" type="button">Load Tiles</button>
-          <button id="loadPlanWallImage" type="button">Load Walls</button>
-        </div>
-        <input id="planTilesetImageInput" type="file" accept="image/*" hidden>
-        <input id="planWallImageInput" type="file" accept="image/*" hidden>
-        <div class="editor-mini-actions">
-          <button id="savePlanSpawn" type="button">Save View</button>
-          <button id="clearPlanDraft" type="button">Clear Plan</button>
-        </div>
-        <div id="editorPlanStatus" class="editor-line-status" role="status"></div>
-      </div>
       <div class="editor-prefab-form editor-section">
         <input id="editorPrefabName" maxlength="28" value="New Set" aria-label="Prefab name">
         <label>Layer
@@ -261,6 +237,31 @@
         <strong>Plan View</strong>
         <button id="closePlanModal" class="close-button" title="Close plan view">X</button>
       </header>
+      <div class="plan-modal-tools" aria-label="Plan view controls">
+        <label>Tileset
+          <select id="editorPlanTileset">
+            <option value="village" selected>Village</option>
+            <option value="ruins">Ruins</option>
+            <option value="castle">Castle</option>
+            <option value="graveyard">Graveyard</option>
+            <option value="dungeon">Dungeon</option>
+            <option value="undead">Undead</option>
+          </select>
+        </label>
+        <div id="editorPlanBrushes" class="editor-plan-brushes" aria-label="Plan paint brushes"></div>
+        <div class="editor-plan-wall-controls" aria-label="Plan wall controls">
+          <label>Wall Count <input id="editorPlanWallCount" type="range" min="1" max="96" step="1" value="48"><span id="editorPlanWallCountValue">48</span></label>
+          <label>Wall Spacing <input id="editorPlanWallSpacing" type="range" min="0.5" max="3" step="0.1" value="1"><span id="editorPlanWallSpacingValue">1.0</span></label>
+          <label>Wall Nudge <input id="editorPlanWallSpread" type="range" min="0.6" max="1.8" step="0.05" value="1"><span id="editorPlanWallSpreadValue">1.00</span></label>
+        </div>
+        <div class="editor-mini-actions">
+          <button id="loadPlanTilesetImage" type="button">Load Tiles</button>
+          <button id="loadPlanWallImage" type="button">Load Walls</button>
+        </div>
+        <input id="planTilesetImageInput" type="file" accept="image/*" hidden>
+        <input id="planWallImageInput" type="file" accept="image/*" hidden>
+        <div id="editorPlanStatus" class="editor-line-status" role="status"></div>
+      </div>
       <div class="plan-modal-controls">
         <label>Width <input id="editorPlanWidth" type="number" min="4" max="24" step="1" value="12"></label>
         <label>Height <input id="editorPlanHeight" type="number" min="4" max="24" step="1" value="12"></label>
@@ -271,6 +272,7 @@
         <button id="savePlanViewModal" type="button">Save View</button>
         <select id="editorPlanLoadSelect" aria-label="Load saved plan view"></select>
         <button id="loadPlanViewModal" type="button">Load View</button>
+        <button id="clearPlanDraft" type="button">Clear Plan</button>
       </div>
       <canvas id="editorPlanCanvas" width="480" height="480" aria-label="Top down plan paint grid"></canvas>
       <div class="plan-modal-footer">

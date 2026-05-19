@@ -123,7 +123,7 @@ const EDITOR_SCALE_MAX = 4;
 const EDITOR_PREFAB_RANDOM_RADIUS = 3.8;
 const EDITOR_LAYERS = ["ground", "building", "vegetation"];
 const DEFAULT_EDITOR_LAYER_VISIBILITY = { ground: true, building: true, vegetation: true };
-const WALL_ATLAS_FILE = "stonewall.png";
+const WALL_ATLAS_FILE = "wall1.png";
 const WALL_ATLAS_WIDTH = 166;
 const WALL_ATLAS_HEIGHT = 97;
 const WALL_CELL_WIDTH = WALL_ATLAS_WIDTH / 2;
@@ -137,6 +137,15 @@ const DEFAULT_WALL_SPRITE_DEFS = [
   { id: WALL_SPRITES.gate, name: "Stone Wall Gate", role: "gate", col: 1, row: 0, kind: "gate" }
 ];
 const PLAN_GRID_SIZE = 12;
+const PLAN_WALL_COUNT_DEFAULT = 48;
+const PLAN_WALL_COUNT_MIN = 1;
+const PLAN_WALL_COUNT_MAX = 96;
+const PLAN_WALL_SPACING_DEFAULT = 1;
+const PLAN_WALL_SPACING_MIN = 0.5;
+const PLAN_WALL_SPACING_MAX = 3;
+const PLAN_WALL_SPREAD_DEFAULT = 1;
+const PLAN_WALL_SPREAD_MIN = 0.6;
+const PLAN_WALL_SPREAD_MAX = 1.8;
 const PLAN_RUINS_TILESET_CHANCE = 0.16;
 const PLAN_BUILDING_SPAWN_CHANCE = 0.7;
 const PLAN_RUINS_BUILDING_SPAWN_CHANCE = 0.25;
@@ -154,6 +163,7 @@ const PLAN_BRUSHES = [
   { id: "tower", label: "Towers", color: "#8f7cc8" },
   { id: "building", label: "Buildings", color: "#c85f47" },
   { id: "grave", label: "Graves", color: "#d7d2bf" },
+  { id: "path", label: "Paths", color: "#80796c" },
   { id: "prop", label: "Props", color: "#6ea867" },
   { id: "erase", label: "Erase", color: "#1c1712" }
 ];
@@ -161,6 +171,13 @@ const PLAN_BRUSH_BY_ID = Object.fromEntries(PLAN_BRUSHES.map(brush => [brush.id,
 const PLAN_TILESET_ROLE_ROWS = {
   walls: ["wall", "wall", "wall", "wall"],
   main: ["house", "tower", "building", "prop"]
+};
+const PLAN_NUMBERED_ASSET_LIMIT = 24;
+const PLAN_FILE_ROLE_PREFIXES = {
+  house: ["house"],
+  building: ["buildings", "building", "buildigns"],
+  tower: ["towers", "tower"],
+  prop: ["biome"]
 };
 
 function makeHero(id, name, x, y, stats, equipment, inventory) {
@@ -456,7 +473,7 @@ const state = {
     prefabs: [],
     plans: [],
     draft: { name: "New Set", occurrence: 4, anchor: null, items: [] },
-    planDraft: { name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {} },
+    planDraft: { name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {}, wallCount: PLAN_WALL_COUNT_DEFAULT, wallSpacing: PLAN_WALL_SPACING_DEFAULT, wallSpread: PLAN_WALL_SPREAD_DEFAULT },
     planModal: { x: null, y: null, width: 540, height: 620 },
     planTilesetSources: {},
     placingPrefabId: null,
@@ -593,6 +610,7 @@ async function loadAssets() {
   }
   await loadBiomeWallAssets();
   await loadPlanTilesetAssets();
+  await loadPlanPathTileset();
 
   try {
     const res = await fetch("sprite-lookup.json");
@@ -663,15 +681,21 @@ function makeTerrainImage(src) {
 }
 
 async function loadBiomeWallAssets() {
-  if (!biomeAssets[WALL_ATLAS_FILE]) {
-    const image = new Image();
+  let image = biomeAssets[WALL_ATLAS_FILE];
+  if (!image) {
+    image = new Image();
     image.src = `assets/biome/${WALL_ATLAS_FILE}`;
     biomeAssets[WALL_ATLAS_FILE] = image;
   }
-  registerDefaultWallSprites();
+  await image.decode().catch(() => undefined);
+  registerDefaultWallSprites(image);
 }
 
-function registerDefaultWallSprites() {
+function registerDefaultWallSprites(image) {
+  const atlasWidth = image?.naturalWidth || WALL_ATLAS_WIDTH;
+  const atlasHeight = image?.naturalHeight || WALL_ATLAS_HEIGHT;
+  const cellWidth = atlasWidth / 2;
+  const cellHeight = atlasHeight;
   for (const def of DEFAULT_WALL_SPRITE_DEFS) {
     biomeSprites[def.id] = {
       id: def.id,
@@ -679,12 +703,12 @@ function registerDefaultWallSprites() {
       kind: def.kind,
       wallRole: def.role,
       atlas: WALL_ATLAS_FILE,
-      cell: { col: def.col, row: def.row, w: WALL_CELL_WIDTH, h: WALL_CELL_HEIGHT },
+      cell: { col: def.col, row: def.row, w: cellWidth, h: cellHeight },
       approxRect: {
-        x: def.col * WALL_CELL_WIDTH,
-        y: def.row * WALL_CELL_HEIGHT,
-        w: WALL_CELL_WIDTH,
-        h: WALL_CELL_HEIGHT
+        x: def.col * cellWidth,
+        y: def.row * cellHeight,
+        w: cellWidth,
+        h: cellHeight
       },
       promptSummary: `${def.name}, modular stone wall sprite`
     };
@@ -692,6 +716,7 @@ function registerDefaultWallSprites() {
 }
 
 async function loadPlanTilesetAssets() {
+  await loadPlanNumberedAssets();
   for (const tilesetId of Object.keys(PLAN_TILESET_DEFS)) {
     await loadPlanTilesetKind(tilesetId, "main");
     await loadPlanTilesetKind(tilesetId, "walls");
@@ -702,6 +727,200 @@ async function loadPlanTilesetAssets() {
       await registerPlanTilesetSource(tilesetId, kind, dataUrl, true);
     }
   }
+}
+
+async function loadPlanNumberedAssets() {
+  await loadPlanWallAtlases();
+  for (const [role, prefixes] of Object.entries(PLAN_FILE_ROLE_PREFIXES)) {
+    await loadNumberedPlanRole(role, prefixes, PLAN_NUMBERED_ASSET_LIMIT);
+  }
+}
+
+async function loadPlanWallAtlases() {
+  for (let index = 1; index <= PLAN_NUMBERED_ASSET_LIMIT; index++) {
+    const files = [`wall${index}.png`, `Wall${index}.png`, `walls${index}.png`, `Walls${index}.png`];
+    const candidates = files.flatMap(file => [file, `assets/biome/${file}`]);
+    const image = await loadFirstExistingImage(candidates);
+    if (!image) continue;
+    registerPlanWallAtlasSprites(index, image.image, image.source);
+  }
+}
+
+async function loadNumberedPlanRole(role, prefixes, limit) {
+  for (let index = 1; index <= limit; index++) {
+    for (const prefix of prefixes) {
+      const file = `${prefix}${index}.png`;
+      const capitalized = `${prefix.charAt(0).toUpperCase()}${prefix.slice(1)}${index}.png`;
+      const image = await loadFirstExistingImage([file, capitalized, `assets/biome/${file}`, `assets/biome/${capitalized}`]);
+      if (!image) continue;
+      registerPlanFileSprite(role, index, image.image, image.source);
+      break;
+    }
+  }
+}
+
+async function loadFirstExistingImage(candidates) {
+  for (const candidate of candidates) {
+    const image = await loadOptionalImage(candidate);
+    if (image) return { image, source: candidate };
+  }
+  return null;
+}
+
+function registerPlanWallAtlasSprites(index, image, source) {
+  const atlasKey = `plan:file:walls:${index}`;
+  biomeAssets[atlasKey] = image;
+  const cellW = image.naturalWidth / 2;
+  const cellH = image.naturalHeight;
+  [
+    { role: "wall", cell: 0 },
+    { role: "door", cell: 1 }
+  ].forEach(def => {
+    const id = `plan_file_${def.role}_${index}`;
+    biomeSprites[id] = {
+      id,
+      name: `${def.role} ${index}`,
+      kind: "wall",
+      planTileset: "file",
+      planRole: def.role,
+      atlas: atlasKey,
+      approxRect: { x: def.cell * cellW, y: 0, w: cellW, h: cellH },
+      promptSummary: `Plan view ${def.role} from ${source}`
+    };
+  });
+}
+
+function registerPlanFileSprite(role, index, image, source) {
+  const resolvedRole = role === "wall" && index === 2 ? "door" : role;
+  const atlasKey = `plan:file:${role}:${index}`;
+  const id = `plan_file_${role}_${index}`;
+  biomeAssets[atlasKey] = image;
+  biomeSprites[id] = {
+    id,
+    name: `${resolvedRole} ${index}`,
+    kind: resolvedRole === "house" ? "house" : resolvedRole === "tower" ? "tower" : resolvedRole === "building" ? "building" : resolvedRole === "wall" || resolvedRole === "door" ? "wall" : "container",
+    planTileset: "file",
+    planRole: resolvedRole,
+    atlas: atlasKey,
+    approxRect: { x: 0, y: 0, w: image.naturalWidth, h: image.naturalHeight },
+    promptSummary: `Plan view ${resolvedRole} from ${source}`
+  };
+}
+
+async function loadPlanPathTileset() {
+  const image = await loadFirstExistingImage(["paths1.png", "Paths1.png", "assets/biome/paths1.png", "assets/biome/Paths1.png"]);
+  if (image) {
+    registerPlanPathTilesetImage(image.image, image.source);
+    return;
+  }
+  registerGeneratedPlanPathTileset();
+}
+
+function registerPlanPathTilesetImage(image, source) {
+  const tileW = image.naturalWidth / 4;
+  const tileH = image.naturalHeight / 4;
+  const atlasKey = "plan:path:stone";
+  biomeAssets[atlasKey] = image;
+  for (let mask = 0; mask < 16; mask++) {
+    const id = `plan_path_mask_${mask}`;
+    biomeSprites[id] = {
+      id,
+      name: `Stone Path ${mask}`,
+      kind: "path",
+      planTileset: "generated",
+      planRole: "path",
+      atlas: atlasKey,
+      approxRect: {
+        x: (mask % 4) * tileW,
+        y: Math.floor(mask / 4) * tileH,
+        w: tileW,
+        h: tileH
+      },
+      promptSummary: `Plan view seamless stone path tile from ${source}`
+    };
+  }
+}
+
+function registerGeneratedPlanPathTileset() {
+  const tileW = 160;
+  const tileH = 96;
+  const cols = 4;
+  const rows = 4;
+  const canvasEl = document.createElement("canvas");
+  canvasEl.width = tileW * cols;
+  canvasEl.height = tileH * rows;
+  const pathCtx = canvasEl.getContext("2d");
+  for (let mask = 0; mask < 16; mask++) {
+    drawGeneratedPathTile(pathCtx, mask, (mask % cols) * tileW, Math.floor(mask / cols) * tileH, tileW, tileH);
+  }
+  const image = new Image();
+  image.src = canvasEl.toDataURL("image/png");
+  registerPlanPathTilesetImage(image, "generated runtime atlas");
+}
+
+function drawGeneratedPathTile(pathCtx, mask, ox, oy, tileW, tileH) {
+  const cx = ox + tileW / 2;
+  const cy = oy + tileH / 2;
+  const diamond = [
+    [cx, oy + 6],
+    [ox + tileW - 8, cy],
+    [cx, oy + tileH - 6],
+    [ox + 8, cy]
+  ];
+  pathCtx.save();
+  pathCtx.beginPath();
+  pathCtx.moveTo(diamond[0][0], diamond[0][1]);
+  for (let i = 1; i < diamond.length; i++) pathCtx.lineTo(diamond[i][0], diamond[i][1]);
+  pathCtx.closePath();
+  pathCtx.clip();
+  pathCtx.fillStyle = "rgba(0,0,0,0)";
+  pathCtx.clearRect(ox, oy, tileW, tileH);
+  pathCtx.fillStyle = "rgba(42, 36, 29, 0.18)";
+  pathCtx.fillRect(ox, oy, tileW, tileH);
+  drawPathSegment(pathCtx, cx, cy, (diamond[0][0] + diamond[1][0]) / 2, (diamond[0][1] + diamond[1][1]) / 2, mask & 1);
+  drawPathSegment(pathCtx, cx, cy, (diamond[1][0] + diamond[2][0]) / 2, (diamond[1][1] + diamond[2][1]) / 2, mask & 2);
+  drawPathSegment(pathCtx, cx, cy, (diamond[2][0] + diamond[3][0]) / 2, (diamond[2][1] + diamond[3][1]) / 2, mask & 4);
+  drawPathSegment(pathCtx, cx, cy, (diamond[3][0] + diamond[0][0]) / 2, (diamond[3][1] + diamond[0][1]) / 2, mask & 8);
+  pathCtx.fillStyle = "#6f695d";
+  pathCtx.strokeStyle = "#2b261f";
+  pathCtx.lineWidth = 2;
+  pathCtx.beginPath();
+  pathCtx.ellipse(cx, cy, 32, 18, 0, 0, Math.PI * 2);
+  pathCtx.fill();
+  pathCtx.stroke();
+  for (let i = 0; i < 9; i++) {
+    const angle = i * 2.399 + mask * 0.37;
+    const rx = cx + Math.cos(angle) * (8 + (i % 4) * 5);
+    const ry = cy + Math.sin(angle) * (5 + (i % 3) * 3);
+    pathCtx.fillStyle = i % 2 ? "#817a6c" : "#585248";
+    pathCtx.beginPath();
+    pathCtx.ellipse(rx, ry, 5 + (i % 3), 3 + (i % 2), angle * 0.4, 0, Math.PI * 2);
+    pathCtx.fill();
+  }
+  pathCtx.restore();
+}
+
+function drawPathSegment(pathCtx, cx, cy, tx, ty, connected) {
+  if (!connected) return;
+  pathCtx.strokeStyle = "#6f695d";
+  pathCtx.lineWidth = 30;
+  pathCtx.lineCap = "round";
+  pathCtx.beginPath();
+  pathCtx.moveTo(cx, cy);
+  pathCtx.lineTo(tx, ty);
+  pathCtx.stroke();
+  pathCtx.strokeStyle = "#817a6c";
+  pathCtx.lineWidth = 18;
+  pathCtx.beginPath();
+  pathCtx.moveTo(cx, cy);
+  pathCtx.lineTo(tx, ty);
+  pathCtx.stroke();
+  pathCtx.strokeStyle = "#2b261f";
+  pathCtx.lineWidth = 2;
+  pathCtx.beginPath();
+  pathCtx.moveTo(cx, cy);
+  pathCtx.lineTo(tx, ty);
+  pathCtx.stroke();
 }
 
 async function loadPlanTilesetKind(tilesetId, kind) {
@@ -751,16 +970,17 @@ function registerPlanTilesetImage(tilesetId, kind, image, source) {
     const role = roleRows[row] || "prop";
     for (let col = 0; col < cols; col++) {
       const index = row * cols + col;
+      const resolvedRole = kind === "walls" && index === 1 ? "door" : role;
       const id = `plan_${tilesetId}_${kind}_${role}_${index}`;
       biomeSprites[id] = {
         id,
-        name: `${PLAN_TILESET_DEFS[tilesetId].label} ${role} ${index + 1}`,
-        kind: role === "house" ? "house" : role === "tower" ? "tower" : role === "building" ? "building" : role === "wall" ? "wall" : role === "grave" ? "grave" : "container",
+        name: `${PLAN_TILESET_DEFS[tilesetId].label} ${resolvedRole} ${index + 1}`,
+        kind: resolvedRole === "house" ? "house" : resolvedRole === "tower" ? "tower" : resolvedRole === "building" ? "building" : resolvedRole === "wall" || resolvedRole === "door" ? "wall" : resolvedRole === "grave" ? "grave" : "container",
         planTileset: tilesetId,
-        planRole: role,
+        planRole: resolvedRole,
         atlas: atlasKey,
         approxRect: { x: col * cellW, y: row * cellH, w: cellW, h: cellH },
-        promptSummary: `${PLAN_TILESET_DEFS[tilesetId].label} plan-view ${role} sprite`
+        promptSummary: `${PLAN_TILESET_DEFS[tilesetId].label} plan-view ${resolvedRole} sprite`
       };
     }
   }
@@ -1303,7 +1523,7 @@ function restoreEditorState(editor) {
   state.editor.planView = Boolean(editor.planView);
   state.editor.planDraft = editor.planDraft && typeof editor.planDraft === "object"
     ? editor.planDraft
-    : { name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {} };
+    : { name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {}, wallCount: PLAN_WALL_COUNT_DEFAULT, wallSpacing: PLAN_WALL_SPACING_DEFAULT, wallSpread: PLAN_WALL_SPREAD_DEFAULT };
   state.editor.planModal = editor.planModal && typeof editor.planModal === "object"
     ? editor.planModal
     : { x: null, y: null, width: 540, height: 620 };
@@ -1384,8 +1604,11 @@ function normalizePlanDraft(plan = {}) {
     width: plan.width || PLAN_GRID_SIZE,
     height: plan.height || PLAN_GRID_SIZE,
     activeBrush: plan.activeBrush || "wall",
-    cells: plan.cells || {}
-  }) || { id: "draft-plan", name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {} };
+    cells: plan.cells || {},
+    wallCount: plan.wallCount,
+    wallSpacing: plan.wallSpacing,
+    wallSpread: plan.wallSpread
+  }) || { id: "draft-plan", name: "New Plan", occurrence: 4, tileset: "village", width: PLAN_GRID_SIZE, height: PLAN_GRID_SIZE, activeBrush: "wall", cells: {}, wallCount: PLAN_WALL_COUNT_DEFAULT, wallSpacing: PLAN_WALL_SPACING_DEFAULT, wallSpread: PLAN_WALL_SPREAD_DEFAULT };
   if (typeof plan.sourcePlanId === "string") normalized.sourcePlanId = plan.sourcePlanId;
   if (plan.anchor && Number.isFinite(plan.anchor.x) && Number.isFinite(plan.anchor.y)) {
     normalized.anchor = { x: plan.anchor.x, y: plan.anchor.y };
@@ -1404,7 +1627,7 @@ function normalizePlanSpawn(plan) {
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= width || y >= height) continue;
     cells[`${x},${y}`] = brush;
   }
-  return {
+  const normalized = {
     id: plan.id || `plan-${Date.now()}`,
     name: String(plan.name || "Plan Spawn").slice(0, 32),
     occurrence: clamp(Number(plan.occurrence) || 4, 1, 10),
@@ -1412,8 +1635,15 @@ function normalizePlanSpawn(plan) {
     width,
     height,
     activeBrush: PLAN_BRUSH_BY_ID[plan.activeBrush] ? plan.activeBrush : "wall",
-    cells
+    cells,
+    wallCount: clamp(Math.round(Number(plan.wallCount) || PLAN_WALL_COUNT_DEFAULT), PLAN_WALL_COUNT_MIN, PLAN_WALL_COUNT_MAX),
+    wallSpacing: clamp(Number(plan.wallSpacing) || PLAN_WALL_SPACING_DEFAULT, PLAN_WALL_SPACING_MIN, PLAN_WALL_SPACING_MAX),
+    wallSpread: clamp(Number(plan.wallSpread) || PLAN_WALL_SPREAD_DEFAULT, PLAN_WALL_SPREAD_MIN, PLAN_WALL_SPREAD_MAX)
   };
+  if (plan.anchor && Number.isFinite(plan.anchor.x) && Number.isFinite(plan.anchor.y)) {
+    normalized.anchor = { x: plan.anchor.x, y: plan.anchor.y };
+  }
+  return normalized;
 }
 
 function editorScaleKey(type, id) {
@@ -1906,8 +2136,7 @@ function renderSavedPrefabs() {
 
 function renderEditorPlanTools() {
   const tools = document.getElementById("editorPlanTools");
-  if (!tools) return;
-  tools.hidden = !state.editor.planView;
+  if (tools) tools.hidden = !state.editor.planView;
   const modal = document.getElementById("editorPlanModal");
   if (modal) {
     modal.hidden = !state.editor.planView;
@@ -1925,6 +2154,7 @@ function renderEditorPlanTools() {
   const heightInput = document.getElementById("editorPlanHeight");
   if (widthInput) widthInput.value = state.editor.planDraft.width;
   if (heightInput) heightInput.value = state.editor.planDraft.height;
+  updatePlanWallControlValues();
   const brushGrid = document.getElementById("editorPlanBrushes");
   if (brushGrid) {
     brushGrid.innerHTML = "";
@@ -1946,6 +2176,36 @@ function renderEditorPlanTools() {
   renderSavedPlanViews();
   updatePlanLoadSelect();
   updatePlanTilesetStatus();
+}
+
+function updatePlanWallControlValues() {
+  const plan = state.editor.planDraft;
+  const count = document.getElementById("editorPlanWallCount");
+  const spacing = document.getElementById("editorPlanWallSpacing");
+  const spread = document.getElementById("editorPlanWallSpread");
+  const countValue = document.getElementById("editorPlanWallCountValue");
+  const spacingValue = document.getElementById("editorPlanWallSpacingValue");
+  const spreadValue = document.getElementById("editorPlanWallSpreadValue");
+  if (count) count.value = plan.wallCount;
+  if (spacing) spacing.value = plan.wallSpacing;
+  if (spread) spread.value = plan.wallSpread;
+  if (countValue) countValue.textContent = plan.wallCount;
+  if (spacingValue) spacingValue.textContent = Number(plan.wallSpacing).toFixed(1);
+  if (spreadValue) spreadValue.textContent = Number(plan.wallSpread).toFixed(2);
+}
+
+function bindPlanWallSlider(id, property, normalize) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  const update = persist => {
+    state.editor.planDraft[property] = normalize(input.value);
+    updatePlanWallControlValues();
+    drawPlanCanvas();
+    if (state.editor.planDraft.anchor) requestAnimationFrame(render);
+    if (persist) saveGame(true);
+  };
+  input.addEventListener("input", () => update(false));
+  input.addEventListener("change", () => update(true));
 }
 
 function applyPlanModalLayout() {
@@ -1990,14 +2250,27 @@ function renderSavedPlanViews() {
   for (const plan of state.editor.plans) {
     const row = document.createElement("div");
     row.className = "plan-row";
-    row.innerHTML = `<span>${plan.name} (${plan.width}x${plan.height}, ${PLAN_TILESET_DEFS[plan.tileset].label})</span><button type="button">Load</button>`;
-    row.querySelector("button").addEventListener("click", () => loadPlanIntoDraft(plan.id));
+    row.innerHTML = `<span>${plan.name} (${plan.width}x${plan.height}, ${PLAN_TILESET_DEFS[plan.tileset].label})</span><div class="plan-row-actions"><button type="button" data-plan-action="load">Load</button><button type="button" data-plan-action="delete">Delete</button></div>`;
+    row.querySelector('[data-plan-action="load"]').addEventListener("click", () => loadPlanIntoDraft(plan.id));
+    row.querySelector('[data-plan-action="delete"]').addEventListener("click", event => {
+      event.stopPropagation();
+      deleteSavedPlanView(plan.id);
+    });
     row.addEventListener("click", event => {
       if (event.target.tagName === "BUTTON") return;
       loadPlanIntoDraft(plan.id);
     });
     list.appendChild(row);
   }
+}
+
+function deleteSavedPlanView(id) {
+  const plan = state.editor.plans.find(entry => entry.id === id);
+  state.editor.plans = state.editor.plans.filter(entry => entry.id !== id);
+  if (state.editor.planDraft.sourcePlanId === id) delete state.editor.planDraft.sourcePlanId;
+  saveGame(true);
+  renderEditorPanel();
+  if (plan) toast(`${plan.name} deleted.`);
 }
 
 function updatePlanLoadSelect() {
@@ -2026,9 +2299,12 @@ function updatePlanTilesetStatus() {
   const missing = [];
   if (!main?.loaded) missing.push(PLAN_TILESET_DEFS[tilesetId].file);
   if (!walls?.loaded) missing.push(PLAN_TILESET_DEFS[tilesetId].wallFile);
+  const markerText = state.editor.planDraft.anchor
+    ? "Marker placed; painting updates the map preview."
+    : "Click the game map to place the plan center marker.";
   status.textContent = missing.length
-    ? `Missing ${missing.join(" and ")}. Assign image${missing.length > 1 ? "s" : ""} to use custom ${PLAN_TILESET_DEFS[tilesetId].label} art.`
-    : `${PLAN_TILESET_DEFS[tilesetId].label} images loaded. Click the map to place the center marker; right-click grid cells to erase.`;
+    ? `${markerText} Missing ${missing.join(" and ")}. Assign image${missing.length > 1 ? "s" : ""} to use custom ${PLAN_TILESET_DEFS[tilesetId].label} art.`
+    : `${markerText} Right-click grid cells to erase.`;
 }
 
 function drawPlanCanvas() {
@@ -2053,8 +2329,20 @@ function drawPlanCanvas() {
     const brush = PLAN_BRUSH_BY_ID[brushId];
     if (!brush) continue;
     const [x, y] = key.split(",").map(Number);
-    planCtx.fillStyle = brush.color;
+    planCtx.fillStyle = brushId === "wall" ? "rgba(183, 185, 176, 0.24)" : brush.color;
     planCtx.fillRect(x * cellW + 1, y * cellH + 1, cellW - 2, cellH - 2);
+  }
+  for (const segment of planWallSegments(plan)) {
+    const cx = (segment.cellX + 0.5) * cellW;
+    const cy = (segment.cellY + 0.5) * cellH;
+    const size = Math.max(5, Math.min(cellW, cellH) * 0.42);
+    planCtx.fillStyle = segment.role === "door" ? "#d99a42" : PLAN_BRUSH_BY_ID.wall.color;
+    planCtx.strokeStyle = "rgba(0, 0, 0, 0.65)";
+    planCtx.lineWidth = Math.max(1, Math.round(size * 0.12));
+    planCtx.beginPath();
+    planCtx.rect(cx - size / 2, cy - size / 2, size, size);
+    planCtx.fill();
+    planCtx.stroke();
   }
   planCtx.strokeStyle = "rgba(217, 154, 66, 0.22)";
   planCtx.lineWidth = 1;
@@ -2116,8 +2404,9 @@ function drawPlanViewMarker() {
   ctx.lineTo(p.x, p.y + radius + 7);
   ctx.stroke();
   const plan = state.editor.planDraft;
-  const w = plan.width * 0.96;
-  const h = plan.height * 0.96;
+  const spread = clamp(Number(plan.wallSpread) || PLAN_WALL_SPREAD_DEFAULT, PLAN_WALL_SPREAD_MIN, PLAN_WALL_SPREAD_MAX);
+  const w = plan.width * 0.96 * spread;
+  const h = plan.height * 0.96 * spread;
   const a = worldToScreen(anchor.x - w / 2, anchor.y - h / 2);
   const b = worldToScreen(anchor.x + w / 2, anchor.y - h / 2);
   const c = worldToScreen(anchor.x + w / 2, anchor.y + h / 2);
@@ -2336,6 +2625,9 @@ function newPlanDraft() {
     width: PLAN_GRID_SIZE,
     height: PLAN_GRID_SIZE,
     activeBrush: state.editor.planDraft.activeBrush || "wall",
+    wallCount: state.editor.planDraft.wallCount || PLAN_WALL_COUNT_DEFAULT,
+    wallSpacing: state.editor.planDraft.wallSpacing || PLAN_WALL_SPACING_DEFAULT,
+    wallSpread: state.editor.planDraft.wallSpread || PLAN_WALL_SPREAD_DEFAULT,
     cells: {},
     anchor
   };
@@ -2544,13 +2836,34 @@ function planSeed(plan, cx, cy) {
 }
 
 function planToPrefab(plan, seed, options = {}) {
-  const useRuins = plan.tileset !== "ruins" && hash2(seed, plan.width, WORLD_SEED + 1777) < PLAN_RUINS_TILESET_CHANCE;
+  const useRuins = !options.preview && plan.tileset !== "ruins" && hash2(seed, plan.width, WORLD_SEED + 1777) < PLAN_RUINS_TILESET_CHANCE;
   const tileset = useRuins ? "ruins" : plan.tileset;
   const items = [];
   const centerX = (plan.width - 1) / 2;
   const centerY = (plan.height - 1) / 2;
+  const wallSegments = planWallSegments(plan);
+  const wallSpread = clamp(Number(plan.wallSpread) || PLAN_WALL_SPREAD_DEFAULT, PLAN_WALL_SPREAD_MIN, PLAN_WALL_SPREAD_MAX);
   let index = 0;
+  for (const segment of wallSegments) {
+    const asset = randomPlanAsset(tileset, "wall", seed, segment.cellX, segment.cellY, index, segment.role);
+    if (!asset) {
+      index++;
+      continue;
+    }
+    items.push({
+      type: asset.type,
+      id: asset.id,
+      layer: planLayerForBrush("wall"),
+      dx: (segment.cellX - centerX) * 0.96 * wallSpread,
+      dy: (segment.cellY - centerY) * 0.96 * wallSpread,
+      itemScale: 0.82,
+      rotation: 0,
+      flipX: segment.side === "left" || segment.side === "right"
+    });
+    index++;
+  }
   for (const [key, brush] of Object.entries(plan.cells || {})) {
+    if (brush === "wall") continue;
     const [cellX, cellY] = key.split(",").map(Number);
     if (!Number.isFinite(cellX) || !Number.isFinite(cellY)) continue;
     const spawnRoll = hash2(seed + cellX * 13, seed - cellY * 17, WORLD_SEED + 1801 + index);
@@ -2561,7 +2874,9 @@ function planToPrefab(plan, seed, options = {}) {
         continue;
       }
     }
-    const asset = randomPlanAsset(tileset, brush, seed, cellX, cellY, index);
+    const asset = brush === "path"
+      ? planPathAsset(plan, cellX, cellY)
+      : randomPlanAsset(tileset, brush, seed, cellX, cellY, index);
     if (!asset) {
       index++;
       continue;
@@ -2573,7 +2888,7 @@ function planToPrefab(plan, seed, options = {}) {
       layer: planLayerForBrush(brush),
       dx: (cellX - centerX) * 0.96,
       dy: (cellY - centerY) * 0.96,
-      itemScale: brush === "wall" ? 0.82 : clamp(variation.itemScale, 0.78, 1.22),
+      itemScale: brush === "path" ? 1 : clamp(variation.itemScale, 0.78, 1.22),
       rotation: ["house", "tower", "building", "wall"].includes(brush) ? 0 : variation.rotation,
       flipX: hash2(seed + cellX, seed + cellY, WORLD_SEED + 1811) > 0.5
     });
@@ -2587,29 +2902,119 @@ function planToPrefab(plan, seed, options = {}) {
   };
 }
 
-function planLayerForBrush(brush) {
-  return brush === "prop" || brush === "grave" ? "ground" : "building";
+function planWallMeta(plan) {
+  const wallCells = Object.entries(plan.cells || {})
+    .filter(([, brush]) => brush === "wall")
+    .map(([key]) => key.split(",").map(Number))
+    .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+  if (!wallCells.length) return { minX: 0, maxX: 0, topY: 0, bottomY: 0, doorX: 0, hasDoor: false, hasWall: false };
+  const minX = Math.min(...wallCells.map(([x]) => x));
+  const maxX = Math.max(...wallCells.map(([x]) => x));
+  const topY = Math.min(...wallCells.map(([, y]) => y));
+  const bottomY = Math.max(...wallCells.map(([, y]) => y));
+  const bottomWallXs = wallCells.filter(([, y]) => y === bottomY).map(([x]) => x);
+  const center = (minX + maxX) / 2;
+  const doorX = bottomWallXs.length
+    ? bottomWallXs.sort((a, b) => Math.abs(a - center) - Math.abs(b - center) || a - b)[0]
+    : Math.round(center);
+  const hasDoor = bottomWallXs.length >= 3 && maxX > minX && bottomY > topY;
+  return { minX, maxX, topY, bottomY, doorX, hasDoor, hasWall: true };
 }
 
-function randomPlanAsset(tileset, brush, seed, x, y, index) {
-  const pool = planAssetPool(tileset, brush);
+function planWallSegments(plan) {
+  const meta = planWallMeta(plan);
+  if (!meta.hasWall) return [];
+  const spacing = clamp(Number(plan.wallSpacing) || PLAN_WALL_SPACING_DEFAULT, PLAN_WALL_SPACING_MIN, PLAN_WALL_SPACING_MAX);
+  const count = clamp(Math.round(Number(plan.wallCount) || PLAN_WALL_COUNT_DEFAULT), PLAN_WALL_COUNT_MIN, PLAN_WALL_COUNT_MAX);
+  const candidates = planWallPerimeterCandidates(meta, spacing);
+  const sampled = samplePlanWallCandidates(candidates, count);
+  const doorIndex = sampled
+    .map((segment, index) => ({ index, score: segment.side === "bottom" ? Math.abs(segment.cellX - meta.doorX) : Infinity }))
+    .sort((a, b) => a.score - b.score)[0]?.index;
+  return sampled.map((segment, index) => ({
+    ...segment,
+    role: meta.hasDoor && index === doorIndex ? "door" : "wall"
+  }));
+}
+
+function planWallPerimeterCandidates(meta, spacing) {
+  const candidates = [];
+  const push = (cellX, cellY, side) => {
+    if (!candidates.some(segment => Math.abs(segment.cellX - cellX) < 0.001 && Math.abs(segment.cellY - cellY) < 0.001)) {
+      candidates.push({ cellX, cellY, side });
+    }
+  };
+  const step = Math.max(0.01, spacing);
+  for (let x = meta.minX; x <= meta.maxX + 0.001; x += step) push(Math.min(x, meta.maxX), meta.topY, "top");
+  for (let y = meta.topY + step; y <= meta.bottomY + 0.001; y += step) push(meta.maxX, Math.min(y, meta.bottomY), "right");
+  for (let x = meta.maxX - step; x >= meta.minX - 0.001; x -= step) push(Math.max(x, meta.minX), meta.bottomY, "bottom");
+  for (let y = meta.bottomY - step; y > meta.topY + 0.001; y -= step) push(meta.minX, Math.max(y, meta.topY), "left");
+  return candidates;
+}
+
+function samplePlanWallCandidates(candidates, count) {
+  if (candidates.length <= count) return candidates;
+  const sampled = [];
+  const last = candidates.length - 1;
+  for (let i = 0; i < count; i++) {
+    const sourceIndex = Math.round(i * last / Math.max(1, count - 1));
+    const candidate = candidates[sourceIndex];
+    if (candidate && sampled[sampled.length - 1] !== candidate) sampled.push(candidate);
+  }
+  return sampled;
+}
+
+function planLayerForBrush(brush) {
+  return brush === "prop" || brush === "grave" || brush === "path" ? "ground" : "building";
+}
+
+function planPathAsset(plan, x, y) {
+  const cells = plan.cells || {};
+  const has = (nx, ny) => cells[`${nx},${ny}`] === "path";
+  const mask = (has(x, y - 1) ? 1 : 0)
+    | (has(x + 1, y) ? 2 : 0)
+    | (has(x, y + 1) ? 4 : 0)
+    | (has(x - 1, y) ? 8 : 0);
+  return { type: "planPath", id: `plan_path_mask_${mask}` };
+}
+
+function randomPlanAsset(tileset, brush, seed, x, y, index, wallRole = "wall") {
+  const pool = planAssetPool(tileset, brush, wallRole);
   if (!pool.length) return null;
   const roll = hash2(seed + x * 29 + index * 7, seed - y * 31, WORLD_SEED + brush.length * 97);
   return pool[Math.floor(roll * pool.length) % pool.length];
 }
 
-function planAssetPool(tileset, brush) {
+function planAssetPool(tileset, brush, wallRole = "wall") {
+  if (brush === "wall") {
+    const fileWall = Object.values(biomeSprites)
+      .filter(sprite => sprite.planTileset === "file" && sprite.planRole === wallRole)
+      .map(sprite => ({ type: "biome", id: sprite.id }));
+    if (fileWall.length) return fileWall;
+    if (wallRole === "door") {
+      return biomeSprites[WALL_SPRITES.gate] ? [{ type: "biome", id: WALL_SPRITES.gate }] : [];
+    }
+    return biomeSprites[WALL_SPRITES.segment] ? [{ type: "biome", id: WALL_SPRITES.segment }] : [];
+  }
+  const fileRole = brush === "house" ? "house" : brush === "tower" ? "tower" : brush === "building" ? "building" : brush === "prop" || brush === "grave" ? "prop" : null;
+  if (fileRole) {
+    const fileAssets = Object.values(biomeSprites)
+      .filter(sprite => sprite.planTileset === "file" && sprite.planRole === fileRole)
+      .map(sprite => ({ type: "biome", id: sprite.id }));
+    if (fileAssets.length) return fileAssets;
+  }
   const wallTileset = tileset === "ruins" ? "ruins" : tileset;
   const loadedTileset = brush === "wall" ? wallTileset : tileset;
   const loaded = Object.values(biomeSprites)
-    .filter(sprite => sprite.planTileset === loadedTileset && planRoleMatchesBrush(sprite.planRole, brush))
+    .filter(sprite => sprite.planTileset === loadedTileset && planRoleMatchesBrush(sprite.planRole, brush, wallRole))
     .map(sprite => ({ type: "biome", id: sprite.id }));
   if (loaded.length) return loaded;
+  if (brush === "wall") return [];
   return fallbackPlanAssetPool(tileset, brush);
 }
 
-function planRoleMatchesBrush(role, brush) {
-  if (brush === "wall") return role === "wall";
+function planRoleMatchesBrush(role, brush, wallRole = "wall") {
+  if (brush === "wall") return role === wallRole || (wallRole === "door" ? false : role === "wall");
   if (brush === "house") return role === "house" || role === "building";
   if (brush === "tower") return role === "tower";
   if (brush === "building") return role === "building" || role === "house";
@@ -4568,8 +4973,13 @@ function getPlanDraftPreviewInstance(bounds) {
   const plan = state.editor.planDraft;
   if (!state.editor.open || !state.editor.planView || !plan?.anchor || !Object.keys(plan.cells || {}).length) return [];
   if (plan.anchor.x < bounds.minX - 12 || plan.anchor.x > bounds.maxX + 12 || plan.anchor.y < bounds.minY - 12 || plan.anchor.y > bounds.maxY + 12) return [];
-  const seed = Math.floor(plan.anchor.x * 71 + plan.anchor.y * 83 + WORLD_SEED + 2203);
+  const seed = planPreviewSeed(plan);
   return [{ prefab: planToPrefab(plan, seed, { preview: true }), x: plan.anchor.x, y: plan.anchor.y, draft: true, planDraft: true }];
+}
+
+function planPreviewSeed(plan) {
+  const key = plan.sourcePlanId || plan.name || "draft-plan";
+  return [...key].reduce((sum, ch) => sum + ch.charCodeAt(0), WORLD_SEED + 2203 + plan.width * 17 + plan.height * 19);
 }
 
 function drawEditorPrefabItem(item) {
@@ -4587,11 +4997,28 @@ function drawEditorPrefabItem(item) {
     drawActor({ id: item.id, sprite: item.id, name: enemyName(item.id), kind: "enemy", x: item.x, y: item.y, hp: 1, maxHp: 1, dir: 1, walkT: 0, attackT: 0 });
   } else if (item.type === "item") {
     drawLoot({ id: item.id, x: item.x, y: item.y, qty: 1 });
+  } else if (item.type === "planPath") {
+    drawPlanPathTile(item);
   } else if (item.type === "forest") {
     const z = state.camera.zoom;
     const forest = { variant: Math.floor(Math.abs(rotation) * 1000) % 4, scale: itemScale, density: 4 };
     drawForestClusterSprite(forest, p, TILE_W * z, TILE_H * z, 0.92) || drawProceduralForestCluster(forest, Math.floor(item.x), Math.floor(item.y), p, TILE_W * z, TILE_H * z, 0.92);
   }
+}
+
+function drawPlanPathTile(item) {
+  const sprite = biomeSprites[item.id];
+  const image = sprite && biomeAssets[sprite.atlas];
+  if (!sprite || !assetLoaded(image)) return;
+  const rect = sprite.approxRect;
+  const p = worldToScreen(item.x, item.y);
+  const z = Math.max(state.camera.zoom, FAR_PROP_MIN_RENDER_ZOOM);
+  const tw = TILE_W * z * 1.04;
+  const th = TILE_H * z * 1.18;
+  ctx.save();
+  ctx.globalAlpha = item.draft ? 0.92 : 1;
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, p.x - tw / 2, p.y - th * 0.08, tw, th);
+  ctx.restore();
 }
 
 function editorBiomeSpriteSize(id) {
@@ -4600,7 +5027,10 @@ function editorBiomeSpriteSize(id) {
 
 function biomeSpriteDisplaySize(id) {
   const sprite = biomeSprites[id];
-  if (id === WALL_SPRITES.segment || id === WALL_SPRITES.gate) return { width: WALL_CELL_WIDTH, height: WALL_CELL_HEIGHT, yOffset: 0 };
+  if (id === WALL_SPRITES.segment || id === WALL_SPRITES.gate) {
+    const rect = sprite?.approxRect || {};
+    return { width: rect.w || WALL_CELL_WIDTH, height: rect.h || WALL_CELL_HEIGHT, yOffset: 0 };
+  }
   const kind = sprite?.kind || "";
   if (["building", "house", "shop", "tower", "church", "stable", "forge", "hut", "cabin", "barn", "gate", "arch", "bridge"].includes(kind)) return { width: 190, height: 190, yOffset: 18 };
   if (["shrine", "altar", "statue", "well", "portal", "siege", "gibbet", "wall", "ruin"].includes(kind)) return { width: 126, height: 126, yOffset: 4 };
@@ -6291,6 +6721,7 @@ function placePlanViewMarker(world) {
   state.editor.selected = null;
   state.editor.selectedDraftIndexes = [];
   updateEditorSelectedUi();
+  renderEditorPlanTools();
   saveGame(true);
   toast("Plan center marker placed.");
 }
@@ -6625,6 +7056,9 @@ function bindEditorEvents() {
   document.getElementById("loadPlanWallImage")?.addEventListener("click", () => document.getElementById("planWallImageInput")?.click());
   document.getElementById("planTilesetImageInput")?.addEventListener("change", event => handlePlanTilesetUpload(event.target, "main"));
   document.getElementById("planWallImageInput")?.addEventListener("change", event => handlePlanTilesetUpload(event.target, "walls"));
+  bindPlanWallSlider("editorPlanWallCount", "wallCount", value => clamp(Math.round(Number(value) || PLAN_WALL_COUNT_DEFAULT), PLAN_WALL_COUNT_MIN, PLAN_WALL_COUNT_MAX));
+  bindPlanWallSlider("editorPlanWallSpacing", "wallSpacing", value => clamp(Number(value) || PLAN_WALL_SPACING_DEFAULT, PLAN_WALL_SPACING_MIN, PLAN_WALL_SPACING_MAX));
+  bindPlanWallSlider("editorPlanWallSpread", "wallSpread", value => clamp(Number(value) || PLAN_WALL_SPREAD_DEFAULT, PLAN_WALL_SPREAD_MIN, PLAN_WALL_SPREAD_MAX));
   const planCanvas = document.getElementById("editorPlanCanvas");
   planCanvas?.addEventListener("pointerdown", event => {
     if (event.button === 2) {

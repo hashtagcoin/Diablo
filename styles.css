@@ -510,8 +510,7 @@ select {
 
 .editor-selected,
 .editor-prefab-form,
-.editor-line-tools,
-.editor-plan-tools {
+.editor-line-tools {
   display: grid;
   gap: 6px;
   font-size: 12px;
@@ -519,8 +518,7 @@ select {
 
 .editor-selected label,
 .editor-prefab-form label,
-.editor-line-tools label,
-.editor-plan-tools label {
+.editor-line-tools label {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -546,8 +544,7 @@ select {
 .editor-prefab-form input,
 .editor-prefab-form select,
 .editor-line-tools select,
-.editor-line-tools input,
-.editor-plan-tools select {
+.editor-line-tools input {
   min-width: 0;
   border: 1px solid #8a5a22;
   color: #f4ddaa;
@@ -618,14 +615,35 @@ select {
   background: #392514;
 }
 
-.editor-plan-tools[hidden] {
-  display: none;
-}
-
 .editor-plan-brushes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
+}
+
+.editor-plan-wall-controls {
+  display: grid;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid #4d3216;
+  background: #090807;
+}
+
+.editor-plan-wall-controls label {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-plan-wall-controls input {
+  width: 100%;
+}
+
+.editor-plan-wall-controls span {
+  color: #ffdf9b;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .plan-brush {
@@ -668,7 +686,7 @@ select {
   max-height: calc(100vh - 28px);
   padding: 10px;
   display: grid;
-  grid-template-rows: auto auto auto minmax(180px, 1fr) auto;
+  grid-template-rows: auto auto auto auto minmax(180px, 1fr) auto;
   gap: 9px;
   color: #e9c985;
   background: #15100d;
@@ -690,6 +708,27 @@ select {
   user-select: none;
 }
 
+.plan-modal-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 7px;
+  align-items: start;
+  font-size: 12px;
+}
+
+.plan-modal-tools > label {
+  display: grid;
+  gap: 3px;
+}
+
+.plan-modal-tools .editor-plan-wall-controls {
+  grid-column: 1 / -1;
+}
+
+.plan-modal-tools .editor-line-status {
+  min-height: 30px;
+}
+
 .plan-modal-controls,
 .plan-modal-actions {
   display: grid;
@@ -703,7 +742,7 @@ select {
 }
 
 .plan-modal-actions {
-  grid-template-columns: repeat(2, minmax(0, 0.7fr)) minmax(120px, 1.4fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 0.7fr)) minmax(120px, 1.3fr) repeat(2, auto);
 }
 
 .plan-modal-controls label {
@@ -712,6 +751,8 @@ select {
 }
 
 .plan-modal-controls input,
+.plan-modal-tools select,
+.plan-modal-tools input,
 .plan-modal-actions select {
   min-width: 0;
   height: 28px;
@@ -768,6 +809,11 @@ select {
   padding: 5px 6px;
   border: 1px solid #5f3d19;
   background: #0f0d0b;
+}
+
+.plan-row-actions {
+  display: flex;
+  gap: 5px;
 }
 
 .editor-line-status {
