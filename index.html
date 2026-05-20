@@ -237,35 +237,107 @@
         <strong>Plan View</strong>
         <button id="closePlanModal" class="close-button" title="Close plan view">X</button>
       </header>
-      <div class="plan-modal-tools" aria-label="Plan view controls">
-        <label>Tileset
-          <select id="editorPlanTileset">
-            <option value="village" selected>Village</option>
-            <option value="ruins">Ruins</option>
-            <option value="castle">Castle</option>
-            <option value="graveyard">Graveyard</option>
-            <option value="dungeon">Dungeon</option>
-            <option value="undead">Undead</option>
-          </select>
-        </label>
-        <div id="editorPlanBrushes" class="editor-plan-brushes" aria-label="Plan paint brushes"></div>
-        <div class="editor-plan-wall-controls" aria-label="Plan wall controls">
-          <label>Wall Count <input id="editorPlanWallCount" type="range" min="1" max="96" step="1" value="48"><span id="editorPlanWallCountValue">48</span></label>
-          <label>Wall Spacing <input id="editorPlanWallSpacing" type="range" min="0.5" max="3" step="0.1" value="1"><span id="editorPlanWallSpacingValue">1.0</span></label>
-          <label>Wall Nudge <input id="editorPlanWallSpread" type="range" min="0.6" max="1.8" step="0.05" value="1"><span id="editorPlanWallSpreadValue">1.00</span></label>
+      <div class="plan-modal-layout">
+        <div class="plan-modal-main">
+          <div class="plan-modal-tools" aria-label="Plan view controls">
+            <label>Tileset
+              <select id="editorPlanTileset">
+                <option value="village" selected>Village</option>
+                <option value="ruins">Ruins</option>
+                <option value="castle">Castle</option>
+                <option value="graveyard">Graveyard</option>
+                <option value="dungeon">Dungeon</option>
+                <option value="undead">Undead</option>
+              </select>
+            </label>
+            <div class="plan-modal-controls">
+              <label>Width <input id="editorPlanWidth" type="number" min="4" max="24" step="1" value="12"></label>
+              <label>Height <input id="editorPlanHeight" type="number" min="4" max="24" step="1" value="12"></label>
+              <button id="applyPlanGridSize" type="button">Apply Size</button>
+            </div>
+            <div id="editorPlanBrushes" class="editor-plan-brushes" aria-label="Plan paint brushes"></div>
+            <div class="editor-mini-actions">
+              <button id="loadPlanTilesetImage" type="button">Load Tiles</button>
+              <button id="loadPlanWallImage" type="button">Load Walls</button>
+            </div>
+            <input id="planTilesetImageInput" type="file" accept="image/*" hidden>
+            <input id="planWallImageInput" type="file" accept="image/*" hidden>
+            <div id="editorPlanStatus" class="editor-line-status" role="status"></div>
+          </div>
+          <canvas id="editorPlanCanvas" width="480" height="480" aria-label="Top down plan paint grid"></canvas>
         </div>
-        <div class="editor-mini-actions">
-          <button id="loadPlanTilesetImage" type="button">Load Tiles</button>
-          <button id="loadPlanWallImage" type="button">Load Walls</button>
-        </div>
-        <input id="planTilesetImageInput" type="file" accept="image/*" hidden>
-        <input id="planWallImageInput" type="file" accept="image/*" hidden>
-        <div id="editorPlanStatus" class="editor-line-status" role="status"></div>
-      </div>
-      <div class="plan-modal-controls">
-        <label>Width <input id="editorPlanWidth" type="number" min="4" max="24" step="1" value="12"></label>
-        <label>Height <input id="editorPlanHeight" type="number" min="4" max="24" step="1" value="12"></label>
-        <button id="applyPlanGridSize" type="button">Apply Size</button>
+        <aside class="plan-properties-panel" aria-label="Plan view properties">
+          <section class="plan-property-section plan-wall-properties" aria-label="Wall properties">
+            <strong>Wall Properties</strong>
+            <label>Wall Tileset
+              <select id="editorPlanWallTileset">
+                <option value="current" selected>Match Tileset</option>
+                <option value="village">Village Walls</option>
+                <option value="ruins">Ruins Walls</option>
+                <option value="castle">Castle Walls</option>
+                <option value="graveyard">Graveyard Walls</option>
+                <option value="dungeon">Dungeon Walls</option>
+                <option value="undead">Undead Walls</option>
+              </select>
+            </label>
+            <div class="editor-plan-wall-controls" aria-label="Plan wall controls">
+              <label>Wall Count <input id="editorPlanWallCount" type="range" min="1" max="480" step="1" value="48"><span id="editorPlanWallCountValue">48</span></label>
+              <label>Wall Spacing <input id="editorPlanWallSpacing" type="range" min="0.5" max="15" step="0.1" value="1"><span id="editorPlanWallSpacingValue">1.0</span></label>
+              <label>Wall Nudge <input id="editorPlanWallSpread" type="range" min="0.6" max="9" step="0.05" value="1"><span id="editorPlanWallSpreadValue">1.00</span></label>
+            </div>
+          </section>
+          <section class="plan-property-section plan-building-properties" aria-label="Building properties">
+            <strong>Building Properties</strong>
+            <label>Pattern
+              <select id="editorPlanBuildingPattern">
+                <option value="scatter" selected>Scatter</option>
+                <option value="cluster">Cluster</option>
+                <option value="street">Street Edge</option>
+                <option value="courtyard">Courtyard</option>
+              </select>
+            </label>
+            <label>Houses
+              <select id="editorPlanHouseTileset"></select>
+            </label>
+            <label>House Size <input id="editorPlanHouseSize" data-plan-range="size" type="range" min="0.25" max="3" step="0.05" value="1"><span id="editorPlanHouseSizeValue">1.00</span></label>
+            <label>House X <input id="editorPlanHouseNudgeX" data-plan-range="nudge" type="range" min="-3" max="3" step="0.05" value="0"><span id="editorPlanHouseNudgeXValue">0.00</span></label>
+            <label>House Y <input id="editorPlanHouseNudgeY" data-plan-range="nudge" type="range" min="-3" max="3" step="0.05" value="0"><span id="editorPlanHouseNudgeYValue">0.00</span></label>
+            <label>Buildings
+              <select id="editorPlanBuildingTileset"></select>
+            </label>
+            <label>Building Size <input id="editorPlanBuildingSize" data-plan-range="size" type="range" min="0.25" max="3" step="0.05" value="1"><span id="editorPlanBuildingSizeValue">1.00</span></label>
+            <label>Building X <input id="editorPlanBuildingNudgeX" data-plan-range="nudge" type="range" min="-3" max="3" step="0.05" value="0"><span id="editorPlanBuildingNudgeXValue">0.00</span></label>
+            <label>Building Y <input id="editorPlanBuildingNudgeY" data-plan-range="nudge" type="range" min="-3" max="3" step="0.05" value="0"><span id="editorPlanBuildingNudgeYValue">0.00</span></label>
+            <label>Towers
+              <select id="editorPlanTowerTileset"></select>
+            </label>
+            <label>Tower Size <input id="editorPlanTowerSize" data-plan-range="size" type="range" min="0.25" max="3" step="0.05" value="1"><span id="editorPlanTowerSizeValue">1.00</span></label>
+            <label>Tower X <input id="editorPlanTowerNudgeX" data-plan-range="nudge" type="range" min="-3" max="3" step="0.05" value="0"><span id="editorPlanTowerNudgeXValue">0.00</span></label>
+            <label>Tower Y <input id="editorPlanTowerNudgeY" data-plan-range="nudge" type="range" min="-3" max="3" step="0.05" value="0"><span id="editorPlanTowerNudgeYValue">0.00</span></label>
+          </section>
+          <section class="plan-property-section plan-decoration-properties" aria-label="Decoration properties">
+            <strong>Decoration Properties</strong>
+            <label>Statues
+              <select id="editorPlanStatueTileset"></select>
+            </label>
+            <label>Statue Size <input id="editorPlanStatueSize" data-plan-range="size" type="range" min="0.25" max="3" step="0.05" value="1"><span id="editorPlanStatueSizeValue">1.00</span></label>
+            <label>Statue Count <input id="editorPlanStatueCount" type="range" min="0" max="30" step="1" value="2"><span id="editorPlanStatueCountValue">2</span></label>
+            <label>Statue Types <input id="editorPlanStatueTypes" type="range" min="1" max="24" step="1" value="3"><span id="editorPlanStatueTypesValue">3</span></label>
+            <label class="plan-checkbox-label"><input id="editorPlanFlagEnabled" type="checkbox"> Flags</label>
+            <label>Flag Sheet
+              <select id="editorPlanFlagTileset"></select>
+            </label>
+            <label>Flag Size <input id="editorPlanFlagSize" data-plan-range="size" type="range" min="0.25" max="3" step="0.05" value="1"><span id="editorPlanFlagSizeValue">1.00</span></label>
+            <label>Flag Type
+              <select id="editorPlanFlagType">
+                <option value="banner" selected>Banner</option>
+                <option value="pennant">Pennant</option>
+                <option value="standard">Standard</option>
+                <option value="torn">Torn</option>
+              </select>
+            </label>
+          </section>
+        </aside>
       </div>
       <div class="plan-modal-actions">
         <button id="newPlanViewModal" type="button">New View</button>
@@ -274,7 +346,6 @@
         <button id="loadPlanViewModal" type="button">Load View</button>
         <button id="clearPlanDraft" type="button">Clear Plan</button>
       </div>
-      <canvas id="editorPlanCanvas" width="480" height="480" aria-label="Top down plan paint grid"></canvas>
       <div class="plan-modal-footer">
         <strong>Saved Plans</strong>
         <div id="savedPlanViews" class="saved-plan-views"></div>
